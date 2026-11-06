@@ -1,10 +1,21 @@
-# Mission Control — server core
+# Hermes Mission Control
 
-Read-only Mission Control for the Hermes bot org: a FastAPI server that derives a
-live dashboard view (agents, tasks, events, cost, alerts) straight from Hermes'
-existing SQLite databases. **No emitter hooks, no writes into Hermes.**
+A real-time dashboard of what Hermes and its 17 bots are doing — agents, tasks,
+the event stream, tool calls, throughput, cost, alerts, replay — plus a real
+memory panel and an approval queue that routes to Discord.
 
-Path B per `docs/state-map.md`.
+Two real data paths, neither fabricated:
+- **Path B (read-only):** the server reads Hermes' own `state.db` files (one per
+  profile) + `kanban.db` and derives the dashboard state. No hooks, no writes.
+- **Path A (hooks):** `emitter/plugin/` registers Hermes' own plugin hooks
+  (`pre_llm_call`, `pre_api_request`, `post_api_request`, `pre_tool_call`,
+  `post_tool_call`) to emit real context/usage/tool events and to gate risky
+  tools with a real approval loop.
+
+## Docs
+- [State map — path B](docs/state-map.md)
+- [Hooks contract — path A](docs/hooks.md)
+- [Deploy](docs/deploy.md)
 
 ## What it does
 
@@ -23,10 +34,13 @@ server/
   reducer.py        derives live state (agents, tasks, events, usage, cost)
   alerts.py         stuck / offline / error-burst / budget-risk rules
   db.py             read-only Hermes/kanban connections + writable MC db
-  schema.sql        MC db schema (snapshots, alerts + Path-A approvals/commands)
+  schema.sql        MC db schema (snapshots, alerts, approvals, commands, events)
   requirements.txt  fastapi, uvicorn[standard], pydantic
+emitter/
+  mc_emitter.py     batched, non-blocking, redacting client (real HTTP to the MC)
+  plugin/           the Hermes plugin — real hooks -> the emitter (path A)
 web/
-  index.html        the dashboard UI (single page, no build step)
+  index.html        the dashboard UI (exact Appendix A prototype, live data)
 tests/
   smoke.py          end-to-end smoke test (real data, HTTP only, stdlib only)
 ```

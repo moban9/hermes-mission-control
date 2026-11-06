@@ -13,9 +13,12 @@ Two real data paths, neither fabricated:
   tools with a real approval loop.
 
 ## Docs
+- [The dashboard — panels, screenshot, functionality](docs/dashboard.md)
 - [State map — path B](docs/state-map.md)
 - [Hooks contract — path A](docs/hooks.md)
 - [Deploy](docs/deploy.md)
+
+![Mission Control dashboard](docs/dashboard.png)
 
 ## What it does
 

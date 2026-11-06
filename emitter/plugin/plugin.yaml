@@ -1,0 +1,26 @@
+manifest_version: 1
+name: hermes-mission-control
+version: 0.1.0
+description: >-
+  Emits real agent context, usage, and tool-call events to the Mission Control
+  dashboard using Hermes' own plugin hooks (path A). Grants no tools and never
+  writes into Hermes; only outbound events to the MC API.
+kind: standalone
+requires_hermes: ">=0.21"
+provides_hooks:
+  - pre_llm_call
+  - pre_api_request
+  - post_api_request
+  - pre_tool_call
+  - post_tool_call
+config_schema:
+  mc_url:
+    type: string
+    default: "http://127.0.0.1:8010"
+    description: Mission Control API base URL.
+  approve_tools:
+    type: string
+    default: "terminal,write_file,patch,memory,cronjob,delegate_task"
+    description: >-
+      Comma-separated tool names that must be approved by a human in Mission
+      Control before they run. Empty disables gating.

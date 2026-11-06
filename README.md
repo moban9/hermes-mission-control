@@ -25,6 +25,8 @@ server/
   db.py             read-only Hermes/kanban connections + writable MC db
   schema.sql        MC db schema (snapshots, alerts + Path-A approvals/commands)
   requirements.txt  fastapi, uvicorn[standard], pydantic
+web/
+  index.html        the dashboard UI (single page, no build step)
 tests/
   smoke.py          end-to-end smoke test (real data, HTTP only, stdlib only)
 ```
@@ -57,6 +59,20 @@ in-memory state (the snapshot cache) is single-worker by design.
 The viewer token is read from `MC_VIEWER_TOKEN`; when set, all `/v1/*` routes
 require it via `?token=` or `Authorization: Bearer`. Leave it unset to disable
 auth (local/dev only). `/healthz` stays open.
+
+## Dashboard (web/)
+
+`server/app.py` mounts `web/` at `/` (same process, no build step), so once the
+server is running, open `http://<host>:8000/`. The page is a single
+`web/index.html` (plain HTML/CSS/vanilla JS):
+
+- Prompts for the viewer token on first load; keeps it in `sessionStorage` and
+  never embeds it in the page. Wrong token → re-prompt on the 401.
+- On load it fetches `/v1/state`, then opens `/v1/stream` (SSE) and re-renders
+  on every `snapshot`/`activity` event.
+- Panels: KPI row, 17-agent grid, task pipeline, live event stream, throughput,
+  daily cost forecast, top tools, and alerts. Connection badge shows
+  `Live` / `Reconnecting` plus the age of the last event.
 
 ## State shape (matches `docs/state-map.md` panel mapping)
 

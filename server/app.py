@@ -26,12 +26,21 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 import db
 import reducer
 
 VIEWER_TOKEN = os.environ.get("MC_VIEWER_TOKEN", "")
 SNAPSHOT_INTERVAL_S = float(os.environ.get("MC_SNAPSHOT_INTERVAL_S", "30"))
+
+# Static dashboard (web/) is served at "/" from the same process.  Mounted
+# last so the API routes above win on exact matches; everything else falls
+# through to the SPA (index.html).
+_WEB_DIR = os.environ.get(
+    "MC_WEB_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web"),
+)
 SSE_POLL_INTERVAL_S = float(os.environ.get("MC_SSE_POLL_INTERVAL_S", "2"))
 SSE_KEEPALIVE_S = float(os.environ.get("MC_SSE_KEEPALIVE_S", "15"))
 
@@ -182,3 +191,9 @@ def v1_stream(_auth: None = Depends(_auth)) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# Mount the static dashboard last: /healthz, /v1/state, /v1/stream and
+# /v1/snapshots are registered above and match first; any other path is served
+# from web/ (index.html for "/").
+app.mount("/", StaticFiles(directory=_WEB_DIR, html=True), name="dashboard")

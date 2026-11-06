@@ -23,6 +23,7 @@ h1{font-size:16px;font-weight:700;letter-spacing:.01em}
 .live{display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--line);border-radius:99px;font-size:12px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--gr);box-shadow:0 0 0 0 var(--gr);animation:pl 1.8s infinite}
 .paused .dot{background:var(--am);animation:none}
+.live.off .dot{background:var(--am);animation:none}
 @keyframes pl{70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
 main{max-width:1180px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;backdrop-filter:blur(10px);min-width:0}
@@ -51,7 +52,7 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .ag .top{display:flex;align-items:center;gap:8px}
 .ag .nm{font-weight:600}
 .badge{margin-left:auto;font-size:11px;padding:3px 9px;border-radius:99px;border:1px solid currentColor}
-.running{--c:var(--cy);color:var(--cy)}.thinking{--c:var(--vi);color:var(--vi)}.waiting{--c:var(--am);color:var(--am)}.error{--c:var(--rd);color:var(--rd)}.paused{--c:var(--mu);color:var(--mu)}.idle{--c:var(--gr);color:var(--gr)}
+.running{--c:var(--cy);color:var(--cy)}.thinking{--c:var(--vi);color:var(--vi)}.waiting{--c:var(--am);color:var(--am)}.error{--c:var(--rd);color:var(--rd)}.paused{--c:var(--mu);color:var(--mu)}.idle{--c:var(--gr);color:var(--gr)}.offline{--c:var(--mu);color:var(--mu)}
 .ag .role{color:var(--mu);font-size:12px}
 .ag .now{margin:8px 0;font-size:12.5px;min-height:36px}
 .bar{height:6px;border-radius:9px;background:var(--line);overflow:hidden}
@@ -101,6 +102,22 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .memi{padding:7px 0;border-top:1px solid var(--line);font-size:12.5px}
 input[type=range]{accent-color:var(--cy);margin:8px 0}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* --- live data layer additions (token gate + full-page empty state) --- */
+.gate{position:fixed;inset:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(10px);display:grid;place-items:center;padding:16px}
+.gate.hidden{display:none}
+.gate-card{max-width:400px;width:100%}
+.gate-card h2{font-size:18px;margin-bottom:6px}
+.gate-card p{color:var(--mu);font-size:12.5px;margin:0 0 14px}
+.gate-card form{display:flex;flex-direction:column;gap:10px}
+.gate-input{background:var(--bg2);border:1px solid var(--line);color:var(--tx);border-radius:9px;padding:10px 12px;font:inherit}
+.gate-input:focus{outline:2px solid var(--cy);outline-offset:2px}
+.gate-err{color:var(--rd);font-size:12px;margin-top:10px;min-height:16px}
+.empty-page{position:fixed;inset:0;z-index:45;background:var(--bg);display:grid;place-items:center;padding:16px}
+.empty-page.hidden{display:none}
+.empty-page .card{text-align:center;max-width:440px}
+.empty-page h2{justify-content:center;font-size:16px}
+.empty-page p{color:var(--mu);margin:2px 0 12px}
+.empty-page .mono{color:var(--mu);font-size:12px}
 </style>
 </head>
 <body>
@@ -157,126 +174,351 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   <section class="card n12"><h2>Replay <small id="rpt">Live</small></h2><svg id="heat" class="spark" style="height:90px" viewBox="0 0 360 60" preserveAspectRatio="none" role="img" aria-label="Agent state history"></svg><input type="range" id="rng" min="0" max="0" value="0" style="width:100%" aria-label="Replay position"><div class="chips" id="rpa"></div><div class="meta mono"><span id="rpi"></span><button id="live">Back to live</button></div></section>
 </main>
 
+<div id="gate" class="gate hidden">
+  <div class="card gate-card">
+    <h2>Viewer token</h2>
+    <p>Enter the Mission Control viewer token to load live telemetry. It is kept in this tab only (session storage) and never written into the page.</p>
+    <form id="gateform">
+      <input id="tok" type="password" class="gate-input mono" placeholder="Viewer token" autocomplete="off" spellcheck="false">
+      <button type="submit" class="btn pri">Connect</button>
+    </form>
+    <div id="gateerr" class="gate-err mono"></div>
+  </div>
+</div>
+
+<div id="nobody" class="empty-page hidden">
+  <div class="card">
+    <h2>No active run</h2>
+    <p class="sub">Mission Control is waiting for agent activity. Once a run starts, live telemetry appears here automatically.</p>
+    <div class="mono" id="nobodyage"></div>
+  </div>
+</div>
+
 <script>
 (function(){
 var $=function(i){return document.getElementById(i)};
-var titles=["Summarize competitor pricing","Refactor auth module","Audit API rate limits","Index support tickets","Draft release notes","Verify test coverage","Scrape changelog feeds","Migrate config schema","Review pull request 482","Classify inbound emails","Compile weekly metrics","Patch dependency alerts"];
-var acts={Scout:["Searching docs for rate limit policy","Reading 3 sources","Ranking results by relevance"],Coder:["Editing auth/session.ts","Running unit tests","Fixing type errors"],Critic:["Checking output against spec","Flagging 2 inconsistencies","Scoring answer quality"],Archivist:["Embedding 120 documents","Writing to vector memory","Deduplicating notes"],Runner:["Executing shell step 4 of 9","Waiting on build","Uploading artifact"]};
-var A=[{n:"Scout",r:"Web research"},{n:"Coder",r:"Code changes"},{n:"Critic",r:"Quality review"},{n:"Archivist",r:"Memory and notes"},{n:"Runner",r:"Shell and deploys"}];
-var tc=0;
-function newTask(){tc++;return{id:"T-"+(1000+tc),t:titles[(tc*5)%titles.length],p:0}}
-A.forEach(function(a,i){a.s=i==2?"thinking":i==4?"waiting":"running";a.task=newTask();a.task.p=Math.random()*.7;a.tok=Math.floor(Math.random()*9000);a.act=acts[a.n][0];a.err=0});
-var S={done:41,failed:2,queued:6,tps:[],cost:12.48,start:Date.now(),paused:false,filter:"all",calls:{web_search:38,read_file:52,run_shell:21,write_file:17,vector_query:29}};
-for(var i=0;i<40;i++)S.tps.push(300+Math.random()*120);
-var cols={running:"var(--cy)",thinking:"var(--vi)",waiting:"var(--am)",error:"var(--rd)",paused:"var(--mu)",idle:"var(--gr)"};
+
+/* ------------------------------------------------------------------------- *
+ * Shared state + helpers (closure vars the draw* functions read)             *
+ * ------------------------------------------------------------------------- */
+var cols={running:"var(--cy)",thinking:"var(--vi)",waiting:"var(--am)",error:"var(--rd)",paused:"var(--mu)",idle:"var(--gr)",offline:"var(--mu)"};
+
+var A=[];
+var S={done:0,failed:0,queued:0,tps:[0,0],cost:0,start:Date.now(),paused:false,filter:"all",calls:{},budget:10};
+var AP=[],AL={},H=[],DM={},MEM={};
+var sel=0,rp=null,stk=[],lp=[],ha=[],aid=0;
+var CM=32000,BUD=10,HL=14;
 
 function pad(n){return String(n).padStart(2,"0")}
 function now(){var d=new Date();return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())}
-function log(a,l,m){var el=document.createElement("div");el.className="lv-"+l;el.dataset.l=l;el.innerHTML='<time>'+now()+'</time><span class="a">'+a+'</span><span></span>';el.lastChild.textContent=m;if(S.filter!=="all"&&S.filter!==l)el.hidden=true;var L=$("log");L.appendChild(el);while(L.children.length>80)L.removeChild(L.firstChild);L.scrollTop=L.scrollHeight}
+function fmtT(ts){if(ts==null||!isFinite(ts))return now();var d=new Date(ts*1000);return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())}
+function logAt(a,l,m,ts){var el=document.createElement("div");el.className="lv-"+l;el.dataset.l=l;el.innerHTML='<time>'+(ts||now())+'</time><span class="a">'+a+'</span><span></span>';el.lastChild.textContent=m;if(S.filter!=="all"&&S.filter!==l)el.hidden=true;var L=$("log");L.appendChild(el);while(L.children.length>80)L.removeChild(L.firstChild);L.scrollTop=L.scrollHeight}
+function log(a,l,m){logAt(a,l,m,now())}
+function setH(id,h){var e=$(id);if(e.dataset.h!==h){e.dataset.h=h;e.innerHTML=h}}
+function raise(k,sev,msg,ag){if(AL[k]||(DM[k]&&Date.now()-DM[k]<45000))return;AL[k]={sev:sev,msg:msg,ag:ag,t:now()};log(ag,sev=="crit"?"error":"warn",msg);drawAlerts()}
+function unraise(k){if(AL[k]){delete AL[k];drawAlerts()}}
 
+/* ------------------------------------------------------------------------- *
+ * draw* functions (KEPT from the prototype; only two hardcoded budget         *
+ * literals and the empty-state guards were corrected to flow real data)       *
+ * ------------------------------------------------------------------------- */
 function drawTopo(){
   var s='<defs><radialGradient id="g"><stop offset="0" stop-color="var(--cy)" stop-opacity=".9"/><stop offset="1" stop-color="var(--vi)" stop-opacity=".7"/></radialGradient></defs>';
   var cx=200,cy=125,pos=[];
-  A.forEach(function(a,i){var ang=-Math.PI/2+i*2*Math.PI/A.length;pos.push([cx+Math.cos(ang)*140,cy+Math.sin(ang)*88])});
+  A.forEach(function(a,i){var ang=-Math.PI/2+i*2*Math.PI/Math.max(1,A.length);pos.push([cx+Math.cos(ang)*140,cy+Math.sin(ang)*88])});
   s+='<ellipse cx="200" cy="125" rx="140" ry="88" fill="none" stroke="var(--line)" stroke-dasharray="2 6"/>';
   A.forEach(function(a,i){var p=pos[i];s+='<line class="link" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>';if(a.s=="running"||a.s=="thinking")s+='<line class="flow" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>'});
   s+='<circle class="ring" cx="200" cy="125" r="34" fill="var(--cy)" opacity=".18"/><circle cx="200" cy="125" r="26" fill="url(#g)"/><text x="200" y="129" text-anchor="middle" font-size="11" font-weight="700" fill="#05101f">Hermes</text>';
-  A.forEach(function(a,i){var p=pos[i],c=cols[a.s];s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="var(--bg2)" stroke="'+c+'" stroke-width="2"/>'+(a.s=="running"?'<circle class="ring" cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="'+c+'" opacity=".25"/>':'')+'<text x="'+p[0]+'" y="'+(p[1]+3.5)+'" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--tx)">'+a.n+'</text><text x="'+p[0]+'" y="'+(p[1]+(p[1]>125?36:-27))+'" text-anchor="middle" font-size="9" fill="var(--mu)">'+Math.round(a.task.p*100)+'%</text>'});
+  A.forEach(function(a,i){var p=pos[i],c=cols[a.s]||"var(--mu)";s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="var(--bg2)" stroke="'+c+'" stroke-width="2"/>'+(a.s=="running"?'<circle class="ring" cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="'+c+'" opacity=".25"/>':'')+'<text x="'+p[0]+'" y="'+(p[1]+3.5)+'" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--tx)">'+a.n+'</text><text x="'+p[0]+'" y="'+(p[1]+(p[1]>125?36:-27))+' " text-anchor="middle" font-size="9" fill="var(--mu)">'+Math.round((a.task&&a.task.p||0)*100)+'%</text>'});
   $("topo").innerHTML=s;
 }
 function drawAgents(){
   $("agents").innerHTML=A.map(function(a,i){return '<div class="ag '+a.s+'"><div class="top"><span class="nm">'+a.n+'</span><span class="badge">'+a.s+'</span></div><div class="role">'+a.r+'</div><div class="now">'+a.act+'</div><div class="bar"><div style="width:'+Math.round(a.task.p*100)+'%"></div></div><div class="meta mono"><span>'+a.task.id+'</span><span>'+a.tok.toLocaleString()+' tok</span><button data-i="'+i+'">'+(a.s=="paused"?"Resume":"Pause")+'</button></div></div>'}).join("");
 }
 function drawTasks(){
-  $("cols").innerHTML=[["Queued",S.queued],["Running",A.filter(function(a){return a.s!="paused"&&a.s!="error"}).length],["Done",S.done],["Failed",S.failed]].map(function(c){return '<div class="col"><b>'+c[1]+'</b><span>'+c[0]+'</span></div>'}).join("");
+  var running=(S.running!=null)?S.running:A.filter(function(a){return a.s!="paused"&&a.s!="error"}).length;
+  $("cols").innerHTML=[["Queued",S.queued],["Running",running],["Done",S.done],["Failed",S.failed]].map(function(c){return '<div class="col"><b>'+c[1]+'</b><span>'+c[0]+'</span></div>'}).join("");
   $("tasks").innerHTML=A.map(function(a){return '<div class="task '+a.s+'"><span class="id mono">'+a.task.id+'</span><span class="tt">'+a.task.t+'</span><span class="badge" style="font-size:10.5px;padding:1px 8px">'+a.n+'</span><div class="bar"><div style="width:'+Math.round(a.task.p*100)+'%"></div></div></div>'}).join("");
   $("qsum").textContent=S.queued+" waiting";
 }
 function drawKpi(){
   var act=A.filter(function(a){return a.s=="running"||a.s=="thinking"}).length;
   var rate=Math.round(S.done/(S.done+S.failed)*100);
-  var k=[["Active subagents",act+"/"+A.length,"All healthy","up"],["Tasks completed",S.done,"+3 in the last hour","up"],["Success rate",rate+"%",S.failed+" failed","dn"],["Tokens per second",Math.round(S.tps[S.tps.length-1]),"steady","up"],["Spend today","$"+S.cost.toFixed(2),"of $40 budget","up"]];
+  var k=[["Active subagents",act+"/"+A.length,"All healthy","up"],["Tasks completed",S.done,"+3 in the last hour","up"],["Success rate",rate+"%",S.failed+" failed","dn"],["Tokens per second",Math.round(S.tps[S.tps.length-1]),"steady","up"],["Spend today","$"+S.cost.toFixed(2),"of $"+BUD+" budget","up"]];
   $("kpis").innerHTML=k.map(function(x){return '<div class="kpi"><span>'+x[0]+'</span><b>'+x[1]+'</b><i class="'+x[3]+'">'+x[2]+'</i></div>'}).join("");
 }
+function avgCtxPct(){if(!A.length)return 0;var t=A.reduce(function(s,a){var c=a.cx||{};return s+(c.sys||0)+(c.task||0)+(c.tools||0)+(c.hist||0)+(c.mem||0)},0);return Math.round(t/A.length/CM*100)}
 function drawPerf(){
-  var d=S.tps,mx=Math.max.apply(null,d)+20,mn=Math.min.apply(null,d)-20;
+  var d=S.tps;
+  if(!d||d.length<2){$("spark").innerHTML="";$("tps").textContent="0 tokens/s";$("lat").textContent="\u2014 ms";var c0=avgCtxPct();$("ctx").textContent=c0+"%";$("ctxb").style.width=c0+"%";$("cost").textContent="$"+S.cost.toFixed(2);$("bud").textContent="$"+(BUD-S.cost).toFixed(2);return;}
+  var mx=Math.max.apply(null,d)+20,mn=Math.min.apply(null,d)-20;
   var pts=d.map(function(v,i){return (i/(d.length-1)*300).toFixed(1)+","+(66-(v-mn)/(mx-mn)*60).toFixed(1)}).join(" ");
   $("spark").innerHTML='<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--cy)" stop-opacity=".35"/><stop offset="1" stop-color="var(--cy)" stop-opacity="0"/></linearGradient></defs><polygon points="0,70 '+pts+' 300,70" fill="url(#sg)"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/>';
   $("tps").textContent=Math.round(d[d.length-1])+" tokens/s";
-  $("lat").textContent=Math.round(820+Math.random()*180)+" ms";
-  var c=Math.round(58+Math.random()*6);$("ctx").textContent=c+"%";$("ctxb").style.width=c+"%";
-  $("cost").textContent="$"+S.cost.toFixed(2);$("bud").textContent="$"+(40-S.cost).toFixed(2);
+  $("lat").textContent="\u2014 ms";
+  var c=avgCtxPct();$("ctx").textContent=c+"%";$("ctxb").style.width=c+"%";
+  $("cost").textContent="$"+S.cost.toFixed(2);$("bud").textContent="$"+(BUD-S.cost).toFixed(2);
 }
 function drawTools(){
-  var mx=Math.max.apply(null,Object.keys(S.calls).map(function(k){return S.calls[k]}));
-  $("tools").innerHTML=Object.keys(S.calls).map(function(k){return '<div><span class="mono">'+k+'</span><div class="bar"><div style="width:'+(S.calls[k]/mx*100)+'%"></div></div><span class="mono">'+S.calls[k]+'</span></div>'}).join("");
+  var ks=Object.keys(S.calls);
+  if(!ks.length){$("tools").innerHTML='<div class="empty">No tool calls yet.</div>';return;}
+  var mx=Math.max.apply(null,ks.map(function(k){return S.calls[k]}));
+  $("tools").innerHTML=ks.map(function(k){return '<div><span class="mono">'+k+'</span><div class="bar"><div style="width:'+(S.calls[k]/mx*100)+'%"></div></div><span class="mono">'+S.calls[k]+'</span></div>'}).join("");
 }
 function drawAll(){drawTopo();drawAgents();drawTasks();drawKpi();drawPerf();drawTools()}
 
-function tick(){
-  if(S.paused)return;
-  A.forEach(function(a){
-    if(a.s=="paused")return;
-    if(a.s=="error"){if(--a.err<=0){a.s="running";a.act="Retrying with backoff";log(a.n,"info","Recovered, retrying "+a.task.id)}return}
-    if(Math.random()<.06){a.s=["running","thinking","waiting"][Math.floor(Math.random()*3)]}
-    if(a.s=="running"||a.s=="thinking"){a.task.p+=.04+Math.random()*.08;a.tok+=Math.floor(80+Math.random()*260);S.cost+=.004}
-    if(Math.random()<.35){a.act=acts[a.n][Math.floor(Math.random()*3)];var tool=Object.keys(S.calls)[Math.floor(Math.random()*5)];S.calls[tool]++;log(a.n,"info",a.act+" ["+tool+"]")}
-    if(Math.random()<.025){a.s="error";a.err=3;S.failed++;a.act="Tool call timed out";log(a.n,"error",a.task.id+" tool timeout after 30s");return}
-    if(Math.random()<.02)log(a.n,"warn","Context at 80%, summarizing history");
-    if(a.task.p>=1){S.done++;log(a.n,"info","Completed "+a.task.id+" "+a.task.t);if(S.queued>0)S.queued--;S.queued+=Math.random()<.5?1:0;a.task=newTask();a.s="running"}
-  });
-  S.tps.push(Math.max(220,Math.min(520,S.tps[S.tps.length-1]+(Math.random()-.5)*70)));S.tps.shift();
-  drawAll();
-}
+function drawAlerts(){var ks=Object.keys(AL);$("acount").textContent=ks.length?ks.length+" open":"All clear";setH("alerts",ks.length?ks.map(function(k){var x=AL[k];return '<div class="row"><span class="sev '+x.sev+'"></span><div class="tx">'+x.msg+'<small>'+x.ag+', '+x.t+'</small></div><button data-k="'+k+'">Dismiss</button></div>'}).join(""):'<div class="empty">No alerts. All agents look healthy.</div>')}
+function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Nothing pending";setH("appr",AP.length?AP.map(function(x){return '<div class="row"><span class="sev '+x.risk+'"></span><div class="tx">'+x.ag+' wants to '+x.text+'<small>'+x.risk+' risk, requested '+x.t+'</small></div><button data-d="'+x.id+'">Deny</button><button class="ok" data-a="'+x.id+'">Approve</button></div>'}).join(""):'<div class="empty">No pending requests. Risky actions pause here until you decide.</div>')}
+function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
+function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];var facts=(MEM[a.n]||[]);$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div><h2 style="margin:14px 0 4px">Remembered facts</h2>'+(facts.length?facts.map(function(m){return '<div class="memi">'+m[0]+'<small>'+m[1]+'</small></div>'}).join(""):'<div class="empty">No remembered facts (not available in read-only mode).</div>')}
+function drawReplay(){var n=H.length,cur=rp===null?n-1:rp,s="";H.forEach(function(h,j){h.st.forEach(function(st,i){s+='<rect x="'+j*3+'" y="'+i*12+'" width="2.6" height="11" rx="1" fill="'+cols[st]+'"/>'})});s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="60" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';$("heat").innerHTML=s;var h=H[cur];if(!h){$("rpt").textContent="Live";$("rpa").innerHTML="";$("rpi").textContent="";return;}$("rpt").textContent=rp===null?"Live":"Viewing "+h.t;$("rpa").innerHTML=A.map(function(a,i){return '<span class="chip on" style="color:'+cols[h.st[i]]+'">'+a.n+': '+h.st[i]+', '+h.tk[i]+' at '+h.pr[i]+'%</span>'}).join("");$("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals"}
+function drawFc(){var n=H.length;if(n<2){$("fcs").textContent="Collecting cost history";$("fct").innerHTML='<div class="empty">Not enough history yet \u2014 snapshots are recorded every 30s.</div>';return;}var L=H[n-1],k=Math.min(10,n-1),burn=(L.cost-H[n-1-k].cost)/k*120,proj=S.cost+burn*HL,mx=Math.max(BUD,proj)*1.1,T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");$("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(L.cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';var over=proj>BUD*.9;$("fcs").textContent=over?"Over budget risk":"On track";$("fct").innerHTML='<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div><div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div><div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>';if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Hermes")}
+
 function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textContent="session "+pad(Math.floor(t/3600))+":"+pad(Math.floor(t%3600/60))+":"+pad(t%60)}
 
+/* ------------------------------------------------------------------------- *
+ * Interaction listeners (shared by demo and live modes)                       *
+ * ------------------------------------------------------------------------- */
 $("agents").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var a=A[+b.dataset.i];if(a.s=="paused"){a.s="running";log(a.n,"info","Resumed by operator")}else{a.s="paused";a.act="Paused by operator";log(a.n,"warn","Paused by operator")}drawAll()});
 $("pauseAll").addEventListener("click",function(){S.paused=!S.paused;document.body.classList.toggle("paused",S.paused);$("pauseAll").textContent=S.paused?"Resume all":"Pause all";$("livet").textContent=S.paused?"Paused":"Live";log("Hermes",S.paused?"warn":"info",S.paused?"All agents on hold":"All agents resumed")});
 $("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+'</button>'}).join("");
 $("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});[].forEach.call($("log").children,function(r){r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter})});
-
-var H=[],AL={},DM={},AP=[],aid=0,sel=0,rp=null,stk=A.map(function(){return 0}),lp=A.map(function(){return""}),ha=A.map(function(){return[]}),CM=32000,BUD=40,HL=14;
-var MEM={Scout:[["Rate limit on the v2 API is 600 requests per minute","2h ago"],["Docs mirror at /docs/v2 is out of date","1h ago"],["Prefers primary sources over blogs","today"]],Coder:[["Repo uses pnpm and strict TypeScript","3h ago"],["Auth tests need REDIS_URL set","2h ago"],["Never edit generated files in /dist","today"]],Critic:[["Spec requires a citation for every claim","4h ago"],["A score below 0.7 triggers a rewrite","2h ago"]],Archivist:[["Embedding model uses 1536 dimensions","yesterday"],["Notes older than 30 days are archived","3h ago"],["One namespace per project, not per agent","today"]],Runner:[["Production deploys need a human approval","yesterday"],["Build cache lives in ./build/cache","2h ago"]]};
-var RISK=[["Runner","run rm -rf ./build/cache on the server","high"],["Coder","push 3 commits to main","med"],["Scout","call the paid search API (about $0.80)","low"],["Archivist","delete 14 memory notes older than 30 days","med"],["Runner","deploy build 2.4.1 to production","high"]];
-A.forEach(function(a){a.cx={sys:1800,task:900,tools:2400+Math.floor(Math.random()*2500),hist:3000+Math.floor(Math.random()*3500),mem:1200};a.la=a.act});
-for(var j=0;j<40;j++){var d=new Date(Date.now()-(40-j)*30000);H.push({t:pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds()),st:A.map(function(){var r=Math.random();return r<.6?"running":r<.78?"thinking":r<.92?"waiting":"error"}),pr:A.map(function(){return Math.floor(Math.random()*100)}),tk:A.map(function(){return"T-"+(990+Math.floor(j/6))}),done:S.done-Math.floor((40-j)/4),cost:S.cost-(40-j)*.012,tps:S.tps[j],ap:0})}
-AP.push({id:++aid,ag:"Runner",text:RISK[4][1],risk:"high",t:now()});
-function setH(id,h){var e=$(id);if(e.dataset.h!==h){e.dataset.h=h;e.innerHTML=h}}
-function raise(k,sev,msg,ag){if(AL[k]||(DM[k]&&Date.now()-DM[k]<45000))return;AL[k]={sev:sev,msg:msg,ag:ag,t:now()};log(ag,sev=="crit"?"error":"warn",msg);drawAlerts()}
-function unraise(k){if(AL[k]){delete AL[k];drawAlerts()}}
-function drawAlerts(){var ks=Object.keys(AL);$("acount").textContent=ks.length?ks.length+" open":"All clear";setH("alerts",ks.length?ks.map(function(k){var x=AL[k];return '<div class="row"><span class="sev '+x.sev+'"></span><div class="tx">'+x.msg+'<small>'+x.ag+', '+x.t+'</small></div><button data-k="'+k+'">Dismiss</button></div>'}).join(""):'<div class="empty">No alerts. All agents look healthy.</div>')}
-function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Nothing pending";setH("appr",AP.length?AP.map(function(x){return '<div class="row"><span class="sev '+x.risk+'"></span><div class="tx">'+x.ag+' wants to '+x.text+'<small>'+x.risk+' risk, requested '+x.t+'</small></div><button data-d="'+x.id+'">Deny</button><button class="ok" data-a="'+x.id+'">Approve</button></div>'}).join(""):'<div class="empty">No pending requests. Risky actions pause here until you decide.</div>')}
-function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
-function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div><h2 style="margin:14px 0 4px">Remembered facts</h2>'+MEM[a.n].map(function(m){return '<div class="memi">'+m[0]+'<small>'+m[1]+'</small></div>'}).join("")}
-function drawReplay(){var n=H.length,cur=rp===null?n-1:rp,s="";H.forEach(function(h,j){h.st.forEach(function(st,i){s+='<rect x="'+j*3+'" y="'+i*12+'" width="2.6" height="11" rx="1" fill="'+cols[st]+'"/>'})});s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="60" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';$("heat").innerHTML=s;var h=H[cur];if(!h)return;$("rpt").textContent=rp===null?"Live":"Viewing "+h.t;$("rpa").innerHTML=A.map(function(a,i){return '<span class="chip on" style="color:'+cols[h.st[i]]+'">'+a.n+': '+h.st[i]+', '+h.tk[i]+' at '+h.pr[i]+'%</span>'}).join("");$("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals"}
-function drawFc(){var n=H.length,L=H[n-1],k=Math.min(10,n-1),burn=(L.cost-H[n-1-k].cost)/k*120,proj=S.cost+burn*HL,mx=Math.max(BUD,proj)*1.1,T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");$("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(L.cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';var over=proj>BUD*.9;$("fcs").textContent=over?"Over budget risk":"On track";$("fct").innerHTML='<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div><div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div><div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>';if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Hermes")}
-function tick2(){
- if(S.paused)return;
- AP.forEach(function(x){var a=A.filter(function(q){return q.n==x.ag})[0];if(a.s!="paused"){a.s="waiting";a.act="Awaiting approval"}});
- A.forEach(function(a,i){
-  var c=a.cx,pend=AP.some(function(x){return x.ag==a.n});
-  if(a.s=="running"||a.s=="thinking"){c.tools+=Math.floor(40+Math.random()*140);c.hist+=Math.floor(30+Math.random()*100)}
-  var p=a.task.id+a.task.p;
-  if(a.s!="paused"&&!pend&&p===lp[i])stk[i]++;else stk[i]=0;lp[i]=p;
-  if(stk[i]>=8)raise("stuck"+i,"crit",a.n+" has made no progress for "+Math.round(stk[i]*1.3)+" seconds on "+a.task.id,a.n);else if(stk[i]==0)unraise("stuck"+i);
-  if(a.act!=a.la){a.la=a.act;ha[i].push(a.act);if(ha[i].length>6)ha[i].shift();var u={};ha[i].forEach(function(x){u[x]=1});if(ha[i].length==6&&Object.keys(u).length<=2&&a.s=="running")raise("loop"+i,"warn",a.n+" may be looping: "+Object.keys(u).join(" / "),a.n)}
-  var t=c.sys+c.task+c.tools+c.hist+c.mem;if(t/CM>.85)raise("ctx"+i,"warn",a.n+" context is "+Math.round(t/CM*100)+"% full. Compact it to avoid truncation.",a.n);
- });
- if(AP.length<3&&Math.random()<.08){var r=RISK[Math.floor(Math.random()*RISK.length)];if(!AP.some(function(x){return x.text==r[1]})){AP.push({id:++aid,ag:r[0],text:r[1],risk:r[2],t:now()});log(r[0],"warn","Approval needed: "+r[1]);}}
- H.push({t:now(),st:A.map(function(a){return a.s}),pr:A.map(function(a){return Math.round(a.task.p*100)}),tk:A.map(function(a){return a.task.id}),done:S.done,cost:S.cost,tps:S.tps[S.tps.length-1],ap:AP.length});
- if(H.length>120){H.shift();if(rp!==null)rp=Math.max(0,rp-1)}
- var g=$("rng");g.max=H.length-1;if(rp===null)g.value=H.length-1;
- drawAppr();drawMem();drawReplay();drawFc();
-}
-$("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});
+$("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a&&a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a&&a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});
 $("alerts").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;DM[b.dataset.k]=Date.now();delete AL[b.dataset.k];drawAlerts()});
 $("mtabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.c){var a=A[sel];a.cx.hist=Math.round(a.cx.hist*.25);a.cx.tools=Math.round(a.cx.tools*.4);log(a.n,"info","Context compacted by operator");unraise("ctx"+sel);drawMem();return}sel=+b.dataset.i;drawTabs();drawMem()});
 $("rng").addEventListener("input",function(){var v=+this.value;rp=v>=H.length-1?null:v;drawReplay()});
 $("live").addEventListener("click",function(){rp=null;$("rng").value=H.length-1;drawReplay()});
-$("rng").max=H.length-1;$("rng").value=H.length-1;
-drawTabs();drawMem();drawAlerts();drawAppr();drawReplay();drawFc();setInterval(tick2,1300);
-log("Hermes","info","Mission started, 5 subagents online");log("Hermes","info","Plan split into "+(A.length+S.queued)+" tasks");
-drawAll();setInterval(tick,1300);setInterval(clock,1000);clock();
+
+/* ------------------------------------------------------------------------- *
+ * DEMO MODE (kept verbatim from the prototype for ?demo=1 design work)        *
+ * ------------------------------------------------------------------------- */
+function demoMode(){
+  var titles=["Summarize competitor pricing","Refactor auth module","Audit API rate limits","Index support tickets","Draft release notes","Verify test coverage","Scrape changelog feeds","Migrate config schema","Review pull request 482","Classify inbound emails","Compile weekly metrics","Patch dependency alerts"];
+  var acts={Scout:["Searching docs for rate limit policy","Reading 3 sources","Ranking results by relevance"],Coder:["Editing auth/session.ts","Running unit tests","Fixing type errors"],Critic:["Checking output against spec","Flagging 2 inconsistencies","Scoring answer quality"],Archivist:["Embedding 120 documents","Writing to vector memory","Deduplicating notes"],Runner:["Executing shell step 4 of 9","Waiting on build","Uploading artifact"]};
+  A=[{n:"Scout",r:"Web research"},{n:"Coder",r:"Code changes"},{n:"Critic",r:"Quality review"},{n:"Archivist",r:"Memory and notes"},{n:"Runner",r:"Shell and deploys"}];
+  var tc=0;
+  function newTask(){tc++;return{id:"T-"+(1000+tc),t:titles[(tc*5)%titles.length],p:0}}
+  A.forEach(function(a,i){a.s=i==2?"thinking":i==4?"waiting":"running";a.task=newTask();a.task.p=Math.random()*.7;a.tok=Math.floor(Math.random()*9000);a.act=acts[a.n][0];a.err=0});
+  S={done:41,failed:2,queued:6,tps:[],cost:12.48,start:Date.now(),paused:false,filter:"all",calls:{web_search:38,read_file:52,run_shell:21,write_file:17,vector_query:29}};
+  for(var i=0;i<40;i++)S.tps.push(300+Math.random()*120);
+  BUD=40;
+  MEM={Scout:[["Rate limit on the v2 API is 600 requests per minute","2h ago"],["Docs mirror at /docs/v2 is out of date","1h ago"],["Prefers primary sources over blogs","today"]],Coder:[["Repo uses pnpm and strict TypeScript","3h ago"],["Auth tests need REDIS_URL set","2h ago"],["Never edit generated files in /dist","today"]],Critic:[["Spec requires a citation for every claim","4h ago"],["A score below 0.7 triggers a rewrite","2h ago"]],Archivist:[["Embedding model uses 1536 dimensions","yesterday"],["Notes older than 30 days are archived","3h ago"],["One namespace per project, not per agent","today"]],Runner:[["Production deploys need a human approval","yesterday"],["Build cache lives in ./build/cache","2h ago"]]};
+  var RISK=[["Runner","run rm -rf ./build/cache on the server","high"],["Coder","push 3 commits to main","med"],["Scout","call the paid search API (about $0.80)","low"],["Archivist","delete 14 memory notes older than 30 days","med"],["Runner","deploy build 2.4.1 to production","high"]];
+  A.forEach(function(a){a.cx={sys:1800,task:900,tools:2400+Math.floor(Math.random()*2500),hist:3000+Math.floor(Math.random()*3500),mem:1200};a.la=a.act});
+  H=[];AL={};DM={};AP=[];aid=0;sel=0;rp=null;
+  for(var j=0;j<40;j++){var d=new Date(Date.now()-(40-j)*30000);H.push({t:pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds()),st:A.map(function(){var r=Math.random();return r<.6?"running":r<.78?"thinking":r<.92?"waiting":"error"}),pr:A.map(function(){return Math.floor(Math.random()*100)}),tk:A.map(function(){return "T-"+(990+Math.floor(j/6))}),done:S.done-Math.floor((40-j)/4),cost:S.cost-(40-j)*.012,tps:S.tps[j],ap:0})}
+  AP.push({id:++aid,ag:"Runner",text:RISK[4][1],risk:"high",t:now()});
+  stk=A.map(function(){return 0});lp=A.map(function(){return""});ha=A.map(function(){return[]});
+  function tick(){
+    if(S.paused)return;
+    A.forEach(function(a){
+      if(a.s=="paused")return;
+      if(a.s=="error"){if(--a.err<=0){a.s="running";a.act="Retrying with backoff";log(a.n,"info","Recovered, retrying "+a.task.id)}return}
+      if(Math.random()<.06){a.s=["running","thinking","waiting"][Math.floor(Math.random()*3)]}
+      if(a.s=="running"||a.s=="thinking"){a.task.p+=.04+Math.random()*.08;a.tok+=Math.floor(80+Math.random()*260);S.cost+=.004}
+      if(Math.random()<.35){a.act=acts[a.n][Math.floor(Math.random()*3)];var tool=Object.keys(S.calls)[Math.floor(Math.random()*5)];S.calls[tool]++;log(a.n,"info",a.act+" ["+tool+"]")}
+      if(Math.random()<.025){a.s="error";a.err=3;S.failed++;a.act="Tool call timed out";log(a.n,"error",a.task.id+" tool timeout after 30s");return}
+      if(Math.random()<.02)log(a.n,"warn","Context at 80%, summarizing history");
+      if(a.task.p>=1){S.done++;log(a.n,"info","Completed "+a.task.id+" "+a.task.t);if(S.queued>0)S.queued--;S.queued+=Math.random()<.5?1:0;a.task=newTask();a.s="running"}
+    });
+    S.tps.push(Math.max(220,Math.min(520,S.tps[S.tps.length-1]+(Math.random()-.5)*70)));S.tps.shift();
+    drawAll();
+  }
+  function tick2(){
+    if(S.paused)return;
+    AP.forEach(function(x){var a=A.filter(function(q){return q.n==x.ag})[0];if(a&&a.s!="paused"){a.s="waiting";a.act="Awaiting approval"}});
+    A.forEach(function(a,i){
+      var c=a.cx,pend=AP.some(function(x){return x.ag==a.n});
+      if(a.s=="running"||a.s=="thinking"){c.tools+=Math.floor(40+Math.random()*140);c.hist+=Math.floor(30+Math.random()*100)}
+      var p=a.task.id+a.task.p;
+      if(a.s!="paused"&&!pend&&p===lp[i])stk[i]++;else stk[i]=0;lp[i]=p;
+      if(stk[i]>=8)raise("stuck"+i,"crit",a.n+" has made no progress for "+Math.round(stk[i]*1.3)+" seconds on "+a.task.id,a.n);else if(stk[i]==0)unraise("stuck"+i);
+      if(a.act!=a.la){a.la=a.act;ha[i].push(a.act);if(ha[i].length>6)ha[i].shift();var u={};ha[i].forEach(function(x){u[x]=1});if(ha[i].length==6&&Object.keys(u).length<=2&&a.s=="running")raise("loop"+i,"warn",a.n+" may be looping: "+Object.keys(u).join(" / "),a.n)}
+      var t=c.sys+c.task+c.tools+c.hist+c.mem;if(t/CM>.85)raise("ctx"+i,"warn",a.n+" context is "+Math.round(t/CM*100)+"% full. Compact it to avoid truncation.",a.n);
+    });
+    if(AP.length<3&&Math.random()<.08){var r=RISK[Math.floor(Math.random()*RISK.length)];if(!AP.some(function(x){return x.text==r[1]})){AP.push({id:++aid,ag:r[0],text:r[1],risk:r[2],t:now()});log(r[0],"warn","Approval needed: "+r[1]);}}
+    H.push({t:now(),st:A.map(function(a){return a.s}),pr:A.map(function(a){return Math.round(a.task.p*100)}),tk:A.map(function(a){return a.task.id}),done:S.done,cost:S.cost,tps:S.tps[S.tps.length-1],ap:AP.length});
+    if(H.length>120){H.shift();if(rp!==null)rp=Math.max(0,rp-1)}
+    var g=$("rng");g.max=H.length-1;if(rp===null)g.value=H.length-1;
+    drawAppr();drawMem();drawReplay();drawFc();
+  }
+  $("rng").max=H.length-1;$("rng").value=H.length-1;
+  drawTabs();drawMem();drawAlerts();drawAppr();drawReplay();drawFc();setInterval(tick2,1300);
+  log("Hermes","info","Mission started, 5 subagents online");log("Hermes","info","Plan split into "+(A.length+S.queued)+" tasks");
+  drawAll();setInterval(tick,1300);setInterval(clock,1000);clock();
+}
+
+/* ------------------------------------------------------------------------- *
+ * LIVE MODE (spec section 8: /v1/state + /v1/snapshots + /v1/stream SSE)      *
+ * ------------------------------------------------------------------------- */
+var ROLE={ceo:"Executive",atlas:"Head of Data",cask:"Data Engineer",keel:"Infrastructure",kestrel:"Ops Lead",ledger:"Tech Writer",meridian:"Data Architect",prism:"BI Analyst",quill:"Writer",relay:"DevOps",sable:"Research",seal:"Governance",vera:"Data Analyst",keystone:"Architect",piston:"Developer",nimbus:"Cloud Architect",byline:"Writer"};
+var STATUS={online:"running",stuck:"waiting",offline:"offline",paused:"paused",error:"error"};
+var PROG={online:0.7,stuck:0.4,offline:0,paused:0,error:0};
+var TOKEN_KEY="mc_viewer_token";
+var token=null,es=null,lastEventAt=null,lastToks=null,lastToksTs=null,connState="connecting",snapTimer=null;
+
+function shortId(id){if(id==null||id==="")return "\u2014";var s=String(id);return s.length<=8?s:s.slice(-8)}
+function estimateCx(tk){
+  // Path B exposes no per-session context metric; produce a representative
+  // split from the agent's real token mix (proportions), scaled to a nominal
+  // window. Remembered facts themselves are NOT fabricated (MEM stays empty).
+  var inp=tk.input||0,out=tk.output||0,cr=tk.cache_read||0,rw=tk.reasoning||0;
+  var sys=1500,task=1200,pool=Math.max(0,CM*0.65-sys-task);
+  var denom=(out+rw)+inp+cr||1;
+  return {sys:sys,task:task,
+    tools:Math.round(pool*(out+rw)/denom),
+    hist:Math.round(pool*inp/denom),
+    mem:Math.round(pool*cr/denom)};
+}
+function mapAgent(raw){
+  var st=STATUS[raw.status]||"offline";
+  var title=raw.title||raw.last_activity_description||"idle";
+  var act=raw.current_action||raw.last_activity_description||"idle";
+  return {n:raw.name,r:ROLE[raw.name]||raw.name,s:st,
+    task:{id:shortId(raw.active_session_id),t:title,p:PROG[raw.status]||0},
+    tok:(raw.tokens&&raw.tokens.total)||0,act:act,cx:estimateCx(raw.tokens||{}),err:0,la:act};
+}
+function trackTps(state){
+  var k=state.kpis||{};
+  var tok=(k.total_input_tokens||0)+(k.total_output_tokens||0);
+  var ts=state.generated_at||(Date.now()/1000);
+  if(lastToks!=null&&ts>lastToksTs){var dt=ts-lastToksTs,d=Math.max(0,tok-lastToks);if(dt>0){S.tps.push(Math.round(d/dt));if(S.tps.length>40)S.tps.shift();}}
+  lastToks=tok;lastToksTs=ts;
+}
+function syncAlerts(list){
+  var seen={};
+  (list||[]).forEach(function(a){var key=a.kind+(a.agent?":"+a.agent:"");seen[key]=1;if(DM[key]&&Date.now()-DM[key]<45000)return;AL[key]={sev:a.severity==="critical"?"crit":"warn",msg:a.message,ag:a.agent||"Hermes",t:fmtT(a.raised_at)}});
+  Object.keys(AL).forEach(function(k){if(!seen[k])delete AL[k]});
+  drawAlerts();
+}
+function renderLog(events){
+  var list=(events||[]).filter(function(e){return e.tool_name||e.text;}).slice().reverse().slice(-80);
+  var L=$("log");L.innerHTML="";
+  list.forEach(function(e){var m=e.tool_name?(e.text?e.tool_name+": "+e.text:e.tool_name):e.text;logAt(e.agent||"?","info",m,fmtT(e.ts));});
+  L.scrollTop=L.scrollHeight;
+}
+function mapState(state){
+  A=(state.agents||[]).map(mapAgent);
+  var k=state.kpis||{};
+  S.done=k.tasks_done||0;S.queued=k.tasks_queued||0;S.failed=k.tasks_failed||0;S.running=k.tasks_running||0;
+  S.cost=k.total_cost_usd||0;
+  S.budget=(state.cost_forecast&&state.cost_forecast.budget_usd)||BUD;BUD=S.budget;
+  S.calls=state.tool_counts||{};
+  MEM={};A.forEach(function(a){MEM[a.n]=[];});
+  trackTps(state);
+  syncAlerts(state.alerts||[]);
+  renderLog(state.events||[]);
+}
+function buildH(snaps){
+  H=[];var prev=null;
+  (snaps||[]).forEach(function(s){
+    var tps=0;
+    if(prev){var dt=(s.captured_at-prev.captured_at)||30;var dtok=((s.input_tokens+s.output_tokens)-(prev.input_tokens+prev.output_tokens));tps=dt>0?Math.max(0,Math.round(dtok/dt)):0;}
+    H.push({t:fmtT(s.captured_at),
+      st:s.agents.map(function(a){return STATUS[a.status]||"offline"}),
+      pr:s.agents.map(function(a){return Math.round((PROG[a.status]||0)*100)}),
+      tk:s.agents.map(function(a){return shortId(a.session_id)}),
+      done:s.done,cost:s.cost,tps:tps,ap:0});
+    prev=s;
+  });
+  if(snaps&&snaps.length)S.start=snaps[0].captured_at*1000;
+  var series=H.map(function(h){return h.tps}).filter(function(v){return v>0});
+  if(series.length>=2){S.tps=series.slice(-40);}else{S.tps=[0,0];}
+}
+function pushSnapshot(){
+  H.push({t:now(),st:A.map(function(a){return a.s}),pr:A.map(function(a){return Math.round(a.task.p*100)}),tk:A.map(function(a){return a.task.id}),done:S.done,cost:S.cost,tps:S.tps.length?S.tps[S.tps.length-1]:0,ap:AP.length});
+  if(H.length>120){H.shift();if(rp!==null)rp=Math.max(0,rp-1)}
+  var g=$("rng");g.max=H.length-1;if(rp===null&&g.max>=0)g.value=H.length-1;
+  drawReplay();drawFc();
+}
+function initialDraw(){
+  drawTabs();drawMem();drawAlerts();drawAppr();drawReplay();drawFc();
+  var g=$("rng");g.max=Math.max(0,H.length-1);g.value=Math.max(0,H.length-1);
+  drawAll();
+}
+function hasData(state){
+  if(!state||!state.agents||!state.agents.length)return false;
+  var k=state.kpis||{};
+  if(!(k.total_sessions)&&!(state.events&&state.events.length)&&!(state.tasks&&state.tasks.length))return false;
+  return true;
+}
+function showEmpty(on){$("nobody").classList.toggle("hidden",!on);}
+function setConn(s){
+  connState=s;
+  var el=document.querySelector("header .live");
+  if(!el)return;
+  if(s==="live"){el.classList.remove("off");$("livet").textContent="Live";}
+  else{el.classList.add("off");updateAge();}
+}
+function updateAge(){
+  if(connState==="live")return;
+  if(connState==="connecting"){$("livet").textContent="Connecting\u2026";return;}
+  if(lastEventAt==null){$("livet").textContent="Reconnecting";$("nobodyage").textContent="reconnecting\u2026";return;}
+  var age=Math.round((Date.now()-lastEventAt)/1000);
+  var txt="Reconnecting \u00b7 "+age+"s";
+  $("livet").textContent=txt;
+  if(!$("nobody").classList.contains("hidden"))$("nobodyage").textContent="last event "+age+"s ago";
+}
+function tokenQuery(){return token?("?token="+encodeURIComponent(token)):""}
+function showGate(msg){$("gateerr").textContent=msg||"";$("gate").classList.remove("hidden");$("tok").focus();}
+function hideGate(){$("gate").classList.add("hidden");}
+function rejectAuth(msg){stop();token=null;try{sessionStorage.removeItem(TOKEN_KEY);}catch(e){} $("tok").value="";showGate(msg||"Invalid or missing viewer token.");}
+function stop(){if(es){es.close();es=null;}if(snapTimer){clearInterval(snapTimer);snapTimer=null;}}
+function ensureSSE(){
+  if(es)return;
+  setConn("connecting");
+  es=new EventSource("/v1/stream"+tokenQuery());
+  es.addEventListener("snapshot",onSSE);
+  es.addEventListener("activity",onSSE);
+  es.addEventListener("patch",onSSE);
+  es.addEventListener("alert",onSSEAlert);
+  es.addEventListener("approval",onSSEApproval);
+  es.addEventListener("event",onSSEEvent);
+  es.onopen=function(){lastEventAt=Date.now();setConn("live");};
+  es.onerror=function(){setConn("reconnecting");};
+}
+function onSSE(e){
+  try{var state=JSON.parse(e.data);}catch(err){return;}
+  lastEventAt=Date.now();
+  if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}
+  showEmpty(false);
+  mapState(state);
+  drawAll();drawMem();drawAppr();
+  setConn("live");
+}
+function onSSEAlert(e){try{var a=JSON.parse(e.data);if(a&&a.kind){var key=a.kind+(a.agent?":"+a.agent:"");if(a.raised===false){delete AL[key];}else{AL[key]={sev:a.severity==="critical"?"crit":"warn",msg:a.message,ag:a.agent||"Hermes",t:fmtT(a.raised_at)};}drawAlerts();}}catch(err){}}
+function onSSEApproval(e){try{var a=JSON.parse(e.data);if(a&&a.id){var i=AP.findIndex(function(x){return x.id===a.id});if(a.status==="pending"){if(i<0)AP.push({id:a.id,ag:a.agent,text:a.text,risk:a.risk||"med",t:fmtT(a.requested_at)});}else if(i>=0){AP.splice(i,1);}}drawAppr();}catch(err){}}
+function onSSEEvent(e){try{var v=JSON.parse(e.data);if(v&&v.agent){logAt(v.agent,v.level||"info",v.text||v.tool_name||"",fmtT(v.ts));}}catch(err){}}
+async function connect(){
+  try{
+    var r=await fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"});
+    if(r.status===401){rejectAuth("Invalid or missing viewer token.");return;}
+    if(!r.ok)throw new Error("http "+r.status);
+    var state=await r.json();
+    lastEventAt=Date.now();
+    if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}
+    showEmpty(false);
+    mapState(state);
+    try{var r2=await fetch("/v1/snapshots"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"});if(r2.ok){var sj=await r2.json();buildH(sj.snapshots||[]);}}catch(e){}
+    initialDraw();
+    setConn("live");
+    ensureSSE();
+    if(!snapTimer)snapTimer=setInterval(pushSnapshot,30000);
+  }catch(e){setConn("reconnecting");}
+}
+function bootLive(){
+  var saved=null;try{saved=sessionStorage.getItem(TOKEN_KEY);}catch(e){}
+  $("gateform").addEventListener("submit",function(e){e.preventDefault();var v=$("tok").value.trim();if(!v)return;token=v;try{sessionStorage.setItem(TOKEN_KEY,v);}catch(err){} hideGate();connect();});
+  setInterval(function(){clock();updateAge();},1000);
+  clock();
+  setConn("connecting");
+  if(saved){token=saved;hideGate();connect();}else{showGate();}
+}
+
+/* ------------------------------------------------------------------------- *
+ * Boot: ?demo=1 runs the original simulation; otherwise wire live data        *
+ * ------------------------------------------------------------------------- */
+if(/[?&]demo=1/.test(location.search)){demoMode();}else{bootLive();}
 })();
 </script>
 </body>

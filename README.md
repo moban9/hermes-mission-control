@@ -54,7 +54,7 @@ in-memory state (the snapshot cache) is single-worker by design.
 | `GET /healthz` | none | `{"ok": true}` |
 | `GET /v1/state` | token | full derived state |
 | `GET /v1/stream` | token (query param `?token=`) | SSE: `snapshot` then `activity` on change |
-| `GET /v1/snapshots` | token | list of persisted snapshots (`id`, `captured_at`) |
+| `GET /v1/snapshots` | token | compact replay projection, oldest→newest: per snapshot `captured_at`, `agents` (name/status/session_id/title), `done`, `cost`, `input_tokens`, `output_tokens` |
 
 The viewer token is read from `MC_VIEWER_TOKEN`; when set, all `/v1/*` routes
 require it via `?token=` or `Authorization: Bearer`. Leave it unset to disable

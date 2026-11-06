@@ -167,17 +167,51 @@ def v1_state(_auth: None = Depends(_auth)) -> dict:
     return state
 
 
+def _replay_projection(state: dict) -> dict:
+    """Compact per-snapshot projection for the client's replay (H) panel.
+
+    Strips the heavy parts of a snapshot (events, tool counts, per-model usage)
+    and keeps only what the client needs to rebuild an H entry plus the
+    tokens-per-second series: per-agent status/session/title, and the small set
+    of KPI counters (done, cost, cumulative tokens).
+    """
+    agents = state.get("agents", [])
+    kpis = state.get("kpis", {})
+    return {
+        "captured_at": state.get("generated_at"),
+        "agents": [
+            {
+                "name": a.get("name"),
+                "status": a.get("status"),
+                "session_id": a.get("active_session_id"),
+                "title": a.get("title"),
+            }
+            for a in agents
+        ],
+        "done": kpis.get("tasks_done", 0),
+        "cost": kpis.get("total_cost_usd", 0.0),
+        "input_tokens": kpis.get("total_input_tokens", 0),
+        "output_tokens": kpis.get("total_output_tokens", 0),
+    }
+
+
 @app.get("/v1/snapshots")
 def v1_snapshots(_auth: None = Depends(_auth)) -> dict:
     con = db.open_mc()
     try:
         rows = con.execute(
-            "SELECT id, captured_at, fingerprint FROM snapshots "
-            "ORDER BY captured_at DESC LIMIT 500"
+            "SELECT captured_at, state_json FROM snapshots "
+            "ORDER BY captured_at DESC LIMIT 120"
         ).fetchall()
     finally:
         con.close()
-    return {"snapshots": [dict(r) for r in rows]}
+    out = []
+    for r in reversed(rows):  # oldest -> newest, ready for a chronological H
+        try:
+            out.append(_replay_projection(json.loads(r["state_json"])))
+        except Exception:
+            continue
+    return {"snapshots": out}
 
 
 @app.get("/v1/stream")

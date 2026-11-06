@@ -401,7 +401,7 @@ function mapState(state){
   A=(state.agents||[]).map(mapAgent);
   var k=state.kpis||{};
   S.done=k.tasks_done||0;S.queued=k.tasks_queued||0;S.failed=k.tasks_failed||0;S.running=k.tasks_running||0;
-  S.cost=k.total_cost_usd||0;
+  S.cost=(state.cost_forecast&&state.cost_forecast.daily&&state.cost_forecast.daily.length)?(state.cost_forecast.daily[0].cost_usd||0):(k.total_cost_usd||0); /* spend TODAY (most recent day bucket), not lifetime total */
   S.budget=(state.cost_forecast&&state.cost_forecast.budget_usd)||BUD;BUD=S.budget;
   S.calls=state.tool_counts||{};
   MEM={};A.forEach(function(a){MEM[a.n]=[];});

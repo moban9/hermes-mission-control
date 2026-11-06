@@ -13,3 +13,7 @@ data/
 # Editor / OS
 .DS_Store
 *.swp
+
+# Mission Control secrets (never commit)
+.ingest_token
+.viewer_token

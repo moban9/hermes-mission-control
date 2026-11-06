@@ -23,15 +23,20 @@ import os
 import threading
 import time
 from contextlib import asynccontextmanager
+from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import db
+import discord
+import live
 import reducer
+import settings
 
-VIEWER_TOKEN = os.environ.get("MC_VIEWER_TOKEN", "")
+VIEWER_TOKEN = settings.VIEWER_TOKEN
+INGEST_TOKEN = settings.INGEST_TOKEN
 SNAPSHOT_INTERVAL_S = float(os.environ.get("MC_SNAPSHOT_INTERVAL_S", "30"))
 
 # Static dashboard (web/) is served at "/" from the same process.  Mounted
@@ -72,8 +77,82 @@ def _auth(
         raise HTTPException(status_code=401, detail="invalid or missing viewer token")
 
 
+def _bearer(authorization: str | None) -> str:
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return ""
+
+
+def _require_ingest(authorization: str | None = Header(default=None)) -> None:
+    """Gate the emitter's ingest + approval long-poll endpoints.
+
+    Requires ``Authorization: Bearer MC_INGEST_TOKEN``.  Off (dev only) when the
+    token is unset, mirroring the viewer-token behaviour.
+    """
+    if not INGEST_TOKEN:
+        return
+    if _bearer(authorization) != INGEST_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid or missing ingest token")
+
+
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+# --- SSE broadcast broker ---------------------------------------------------
+# Approval requests/decisions are pushed to every connected SSE client as an
+# ``approval`` event (matching the dashboard's onSSEApproval handler), so the
+# panel updates live without a full state re-reduce.  A thread-safe queue fan-out
+# bridges the sync ingest/decision handlers into the async SSE generators.
+_SSE_SUBSCRIBERS: set[asyncio.Queue] = set()
+_SSE_SUB_LOCK = threading.Lock()
+_SSE_LOOP: asyncio.AbstractEventLoop | None = None
+
+
+def _subscribe_sse() -> asyncio.Queue:
+    q: asyncio.Queue = asyncio.Queue(maxsize=200)
+    with _SSE_SUB_LOCK:
+        _SSE_SUBSCRIBERS.add(q)
+    return q
+
+
+def _unsubscribe_sse(q: asyncio.Queue) -> None:
+    with _SSE_SUB_LOCK:
+        _SSE_SUBSCRIBERS.discard(q)
+
+
+def broadcast_sse(event: str, data: dict) -> None:
+    """Push an SSE event to every connected client (thread-safe, best-effort)."""
+    loop = _SSE_LOOP
+    if loop is None or loop.is_closed():
+        return
+
+    def _put() -> None:
+        with _SSE_SUB_LOCK:
+            subs = list(_SSE_SUBSCRIBERS)
+        for q in subs:
+            try:
+                q.put_nowait((event, data))
+            except asyncio.QueueFull:
+                pass
+
+    try:
+        loop.call_soon_threadsafe(_put)
+    except RuntimeError:
+        pass
+
+
+def _approval_sse(ap: dict) -> dict:
+    """Shape the dashboard's onSSEApproval handler consumes."""
+    return {
+        "id": ap.get("id"),
+        "request_id": ap.get("request_id"),
+        "agent": ap.get("agent"),
+        "text": ap.get("action", ""),
+        "risk": ap.get("risk", "med"),
+        "status": ap.get("status", "pending"),
+        "requested_at": ap.get("requested_at"),
+    }
 
 
 def _snapshot_once() -> None:
@@ -114,36 +193,60 @@ def _snapshot_loop() -> None:
 
 
 async def _sse_gen():
-    """Yield an initial snapshot, then an 'activity' event on any change."""
-    # Baseline fingerprint, then the initial snapshot.
-    last_fp = await asyncio.to_thread(reducer.activity_fingerprint)
-    state = await asyncio.to_thread(reducer.reduce_state)
-    yield _sse("snapshot", state)
+    """Yield a snapshot + pending approvals, then activity/approval events."""
+    q = _subscribe_sse()
+    try:
+        last_fp = await asyncio.to_thread(reducer.activity_fingerprint)
+        state = await asyncio.to_thread(reducer.reduce_state)
+        yield _sse("snapshot", state)
 
-    last_keepalive = time.time()
-    while True:
-        await asyncio.sleep(SSE_POLL_INTERVAL_S)
-        fp = await asyncio.to_thread(reducer.activity_fingerprint)
-        if fp != last_fp:
-            last_fp = fp
-            state = await asyncio.to_thread(reducer.reduce_state)
-            yield _sse("activity", state)
-            last_keepalive = time.time()
-        elif time.time() - last_keepalive >= SSE_KEEPALIVE_S:
-            yield ": ping\n\n"
-            last_keepalive = time.time()
+        # Replay the current pending approvals so the panel populates on load.
+        for ap in state.get("approvals", []):
+            yield _sse("approval", _approval_sse(ap))
+
+        last_keepalive = time.time()
+        while True:
+            # 1. Drain any broadcast events (approval requested/decided).
+            drained = False
+            while True:
+                try:
+                    ev, data = q.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                yield _sse(ev, data)
+                drained = True
+            if drained:
+                last_keepalive = time.time()
+                continue
+
+            # 2. Poll the path-A/B fingerprint for a full state change.
+            await asyncio.sleep(SSE_POLL_INTERVAL_S)
+            fp = await asyncio.to_thread(reducer.activity_fingerprint)
+            if fp != last_fp:
+                last_fp = fp
+                state = await asyncio.to_thread(reducer.reduce_state)
+                yield _sse("activity", state)
+                last_keepalive = time.time()
+            elif time.time() - last_keepalive >= SSE_KEEPALIVE_S:
+                yield ": ping\n\n"
+                last_keepalive = time.time()
+    finally:
+        _unsubscribe_sse(q)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    global _SSE_LOOP
     db.init_mc_db()
     _snapshot_once()  # seed the cache + first snapshot immediately
     thread = threading.Thread(target=_snapshot_loop, daemon=True)
     thread.start()
+    _SSE_LOOP = asyncio.get_running_loop()
     try:
         yield
     finally:
         STATE.running.clear()
+        _SSE_LOOP = None
 
 
 app = FastAPI(title="Mission Control", version="1.0.0", lifespan=lifespan)
@@ -225,6 +328,124 @@ def v1_stream(_auth: None = Depends(_auth)) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+def _handle_approval_requested(ev: dict) -> None:
+    """Persist an approval.requested event, fire Discord, and broadcast SSE."""
+    data = ev.get("data") or {}
+    if not isinstance(data, dict):
+        data = {}
+    request_id = data.get("approval_id") or ev.get("id")
+    agent = ev.get("agent_id") or "unknown"
+    action = data.get("action") or ""
+    risk = data.get("risk") or "med"
+    kind = data.get("kind") or "tool_call"
+    requested_at = live.parse_ts(ev.get("ts")) or time.time()
+
+    with db.mc_lock():
+        con = db.open_mc()
+        try:
+            db.insert_approval(
+                con, request_id, agent, kind,
+                {"action": action, "risk": risk, "kind": kind},
+                requested_at,
+            )
+            con.commit()
+        finally:
+            con.close()
+
+    # Never block ingest on Discord (background thread inside notifier).
+    discord.notify_approval(agent, action, risk)
+
+    ap = db.get_approval(request_id)
+    if ap:
+        broadcast_sse("approval", _approval_sse(ap))
+
+
+@app.post("/v1/events")
+def v1_events(payload: Any = Body(...),
+              authorization: str | None = Header(default=None)) -> dict:
+    """Ingest an emitter event batch.  Idempotent by event ``id``."""
+    _require_ingest(authorization)
+    events = payload if isinstance(payload, list) else [payload]
+
+    accepted = 0
+    duplicates = 0
+    accepted_events: list[dict] = []
+    with db.mc_lock():
+        con = db.open_mc()
+        try:
+            for ev in events:
+                if not isinstance(ev, dict) or not ev.get("id"):
+                    continue
+                if db.insert_event(con, ev) > 0:
+                    accepted += 1
+                    accepted_events.append(ev)
+                else:
+                    duplicates += 1
+            con.commit()
+        finally:
+            con.close()
+
+    for ev in accepted_events:
+        live.merge_event(ev)
+        if ev.get("type") == "approval.requested":
+            _handle_approval_requested(ev)
+
+    return {"accepted": accepted, "duplicates": duplicates}
+
+
+@app.get("/v1/approvals")
+def v1_approvals(_auth: None = Depends(_auth)) -> dict:
+    """Pending approvals (viewer auth)."""
+    return {"approvals": db.list_pending_approvals()}
+
+
+@app.post("/v1/approvals/{identifier}")
+def v1_approval_decide(identifier: str, body: dict = Body(...),
+                       _auth: None = Depends(_auth)) -> dict:
+    """Record an approval decision (viewer auth).  409 if already decided."""
+    decision = str((body or {}).get("decision") or (body or {}).get("status") or "").strip().lower()
+    if decision in ("approve", "approved", "yes"):
+        status = "approved"
+    elif decision in ("deny", "denied", "reject", "rejected", "no"):
+        status = "rejected"
+    else:
+        raise HTTPException(status_code=400, detail="decision must be 'approved' or 'denied'")
+
+    decided_by = str((body or {}).get("decided_by") or "operator")
+    try:
+        updated = db.decide_approval(identifier, status, decided_by, time.time())
+    except LookupError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="approval not found")
+
+    live.bump()  # fold into the SSE activity fingerprint
+    broadcast_sse("approval", _approval_sse(updated))
+    return updated
+
+
+@app.get("/v1/approvals/{request_id}/wait")
+async def v1_approval_wait(request_id: str, timeout: int = 25,
+                           authorization: str | None = Header(default=None)) -> dict:
+    """Long-poll the approval decision (ingest-token auth, the emitter waits here).
+
+    Returns ``{"status": "pending"|"approved"|"denied"}``.  "pending" also covers
+    the brief window before the approval.requested event has been processed.
+    """
+    _require_ingest(authorization)
+    timeout = max(1, min(int(timeout), 120))
+    deadline = time.time() + timeout
+    while True:
+        ap = db.get_approval(request_id)
+        status = ap["status"] if ap else "pending"
+        if status != "pending":
+            return {"status": status}
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return {"status": "pending"}
+        await asyncio.sleep(min(0.5, remaining))
 
 
 # Mount the static dashboard last: /healthz, /v1/state, /v1/stream and

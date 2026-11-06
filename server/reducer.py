@@ -20,6 +20,9 @@ import time
 
 import db
 import alerts
+import live as live_mod
+import memory as memory_mod
+import settings
 
 # How many recent events to surface in /v1/state.
 EVENT_LIMIT = int(os.environ.get("MC_EVENT_LIMIT", "300"))
@@ -32,6 +35,22 @@ _EVENT_COLS = ("id", "session_id", "role", "tool_name", "timestamp")
 
 def _now_iso(ts: float) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(ts))
+
+
+def _live_tool_stats(stats: dict) -> dict:
+    """Derive per-tool averages from the live overlay's raw counters."""
+    out = {}
+    for tool, st in (stats or {}).items():
+        calls = int(st.get("calls") or 0)
+        total = float(st.get("total_duration_ms") or 0.0)
+        out[tool] = {
+            "calls": calls,
+            "ok": int(st.get("ok") or 0),
+            "fail": int(st.get("fail") or 0),
+            "total_duration_ms": total,
+            "avg_duration_ms": round(total / calls, 2) if calls else None,
+        }
+    return out
 
 
 def reduce_agent(name: str, path: str, now: float) -> dict:
@@ -425,7 +444,10 @@ def activity_fingerprint() -> tuple:
     except Exception:
         max_evt = max_task = 0
 
-    return (round(max_msg_ts, 4), round(max_last_act, 4), max_evt, max_task)
+    return (
+        round(max_msg_ts, 4), round(max_last_act, 4), max_evt, max_task,
+        live_mod.version(),
+    )
 
 
 def reduce_state(now: float | None = None, budget_usd: float | None = None) -> dict:
@@ -436,12 +458,35 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
     )
 
     agents = [reduce_agent(name, path, now) for name, path in db.profiles()]
+
+    # Path B memory (real files) + path A live overlay (ingested events).
+    names = [name for name, _ in db.profiles()]
+    memory_by_name = {
+        n: memory_mod.read_agent_memory(
+            settings.MEMORIES_DIR, db.HERMES_PROFILES_DIR, n, now
+        )
+        for n in names
+    }
+    live_agents = live_mod.snapshot()
+    for agent in agents:
+        name = agent["name"]
+        agent["memory"] = memory_by_name.get(name)
+        la = live_agents.get(name)
+        if la:
+            agent["context"] = la.get("context")
+            agent["usage"] = la.get("usage")
+            agent["state"] = la.get("state")
+            agent["live_tool_counts"] = dict(la.get("tool_counts") or {})
+            agent["tool_stats"] = _live_tool_stats(la.get("tool_stats"))
+            agent["recent_tool_calls"] = list(la.get("recent_tool_calls") or [])
+
     tasks, task_kpi = reduce_tasks()
     events = reduce_events(now)
     tool_counts = reduce_tool_counts()
     usage = reduce_usage()
     daily = reduce_daily_cost()
     failure_events = reduce_failure_events(now)
+    approvals = db.list_pending_approvals()
 
     today = time.strftime("%Y-%m-%d", time.gmtime(now))
     today_cost = sum(d["cost_usd"] for d in daily if d["date"] == today)
@@ -484,6 +529,8 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
         "generated_at": now,
         "generated_at_iso": _now_iso(now),
         "agents": agents,
+        "memory": memory_by_name.get("ceo"),
+        "approvals": approvals,
         "kpis": kpis,
         "tasks": tasks,
         "events": events,

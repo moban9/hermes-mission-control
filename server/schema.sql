@@ -5,7 +5,18 @@
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
--- Reserved for Path A (v2): the approval/control channel. Empty in v1.
+-- Ingested emitter events (Path A).  Idempotent by event id (INSERT OR IGNORE).
+CREATE TABLE IF NOT EXISTS events (
+    id       TEXT PRIMARY KEY,
+    ts       TEXT,
+    run_id   TEXT,
+    agent_id TEXT,
+    type     TEXT,
+    data     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+
+-- Reserved for Path A (v2): the approval/control channel.
 CREATE TABLE IF NOT EXISTS approvals (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id   TEXT    UNIQUE NOT NULL,

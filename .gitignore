@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Mission Control runtime data (writable MC db, WAL/SHM sidecars)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Editor / OS
+.DS_Store
+*.swp

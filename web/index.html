@@ -205,7 +205,7 @@ var cols={running:"var(--cy)",thinking:"var(--vi)",waiting:"var(--am)",error:"va
 
 var A=[];
 var S={done:0,failed:0,queued:0,tps:[0,0],cost:0,start:Date.now(),paused:false,filter:"all",calls:{},budget:10};
-var AP=[],AL={},H=[],DM={},MEM={};
+var AP=[],AL={},H=[],DM={},MEM={},LIVE=false;
 var sel=0,rp=null,stk=[],lp=[],ha=[],aid=0;
 var CM=32000,BUD=10,HL=14;
 
@@ -270,7 +270,7 @@ function drawAll(){drawTopo();drawAgents();drawTasks();drawKpi();drawPerf();draw
 function drawAlerts(){var ks=Object.keys(AL);$("acount").textContent=ks.length?ks.length+" open":"All clear";setH("alerts",ks.length?ks.map(function(k){var x=AL[k];return '<div class="row"><span class="sev '+x.sev+'"></span><div class="tx">'+x.msg+'<small>'+x.ag+', '+x.t+'</small></div><button data-k="'+k+'">Dismiss</button></div>'}).join(""):'<div class="empty">No alerts. All agents look healthy.</div>')}
 function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Nothing pending";setH("appr",AP.length?AP.map(function(x){return '<div class="row"><span class="sev '+x.risk+'"></span><div class="tx">'+x.ag+' wants to '+x.text+'<small>'+x.risk+' risk, requested '+x.t+'</small></div><button data-d="'+x.id+'">Deny</button><button class="ok" data-a="'+x.id+'">Approve</button></div>'}).join(""):'<div class="empty">No pending requests. Risky actions pause here until you decide.</div>')}
 function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
-function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];var facts=(MEM[a.n]||[]);$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div><h2 style="margin:14px 0 4px">Remembered facts</h2>'+(facts.length?facts.map(function(m){return '<div class="memi">'+m[0]+'<small>'+m[1]+'</small></div>'}).join(""):'<div class="empty">No remembered facts (not available in read-only mode).</div>')}
+function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];var facts=(MEM[a.n]||[]);$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div><h2 style="margin:14px 0 4px">Remembered facts</h2>'+(facts.length?facts.map(function(m){return '<div class="memi">'+m[0]+(m[1]?'<small>'+m[1]+'</small>':'')+'</div>'}).join(""):'<div class="empty">No remembered facts.</div>')}
 function drawReplay(){var n=H.length,cur=rp===null?n-1:rp,s="";H.forEach(function(h,j){h.st.forEach(function(st,i){s+='<rect x="'+j*3+'" y="'+i*12+'" width="2.6" height="11" rx="1" fill="'+cols[st]+'"/>'})});s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="60" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';$("heat").innerHTML=s;var h=H[cur];if(!h){$("rpt").textContent="Live";$("rpa").innerHTML="";$("rpi").textContent="";return;}$("rpt").textContent=rp===null?"Live":"Viewing "+h.t;$("rpa").innerHTML=A.map(function(a,i){return '<span class="chip on" style="color:'+cols[h.st[i]]+'">'+a.n+': '+h.st[i]+', '+h.tk[i]+' at '+h.pr[i]+'%</span>'}).join("");$("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals"}
 function drawFc(){var n=H.length;if(n<2){$("fcs").textContent="Collecting cost history";$("fct").innerHTML='<div class="empty">Not enough history yet \u2014 snapshots are recorded every 30s.</div>';return;}var L=H[n-1],k=Math.min(10,n-1),burn=(L.cost-H[n-1-k].cost)/k*120,proj=S.cost+burn*HL,mx=Math.max(BUD,proj)*1.1,T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");$("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(L.cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';var over=proj>BUD*.9;$("fcs").textContent=over?"Over budget risk":"On track";$("fct").innerHTML='<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div><div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div><div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>';if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Hermes")}
 
@@ -283,7 +283,7 @@ $("agents").addEventListener("click",function(e){var b=e.target.closest("button"
 $("pauseAll").addEventListener("click",function(){S.paused=!S.paused;document.body.classList.toggle("paused",S.paused);$("pauseAll").textContent=S.paused?"Resume all":"Pause all";$("livet").textContent=S.paused?"Paused":"Live";log("Hermes",S.paused?"warn":"info",S.paused?"All agents on hold":"All agents resumed")});
 $("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+'</button>'}).join("");
 $("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});[].forEach.call($("log").children,function(r){r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter})});
-$("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a&&a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a&&a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});
+$("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;if(LIVE){decideApproval(id,ok);return;}var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a&&a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a&&a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});
 $("alerts").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;DM[b.dataset.k]=Date.now();delete AL[b.dataset.k];drawAlerts()});
 $("mtabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.c){var a=A[sel];a.cx.hist=Math.round(a.cx.hist*.25);a.cx.tools=Math.round(a.cx.tools*.4);log(a.n,"info","Context compacted by operator");unraise("ctx"+sel);drawMem();return}sel=+b.dataset.i;drawTabs();drawMem()});
 $("rng").addEventListener("input",function(){var v=+this.value;rp=v>=H.length-1?null:v;drawReplay()});
@@ -397,6 +397,9 @@ function renderLog(events){
   list.forEach(function(e){var m=e.tool_name?(e.text?e.tool_name+": "+e.text:e.tool_name):e.text;logAt(e.agent||"?","info",m,fmtT(e.ts));});
   L.scrollTop=L.scrollHeight;
 }
+function ageAgo(s){if(s==null||!isFinite(s))return "";s=+s;if(s<60)return "just now";if(s<3600)return Math.round(s/60)+"m ago";if(s<86400)return Math.round(s/3600)+"h ago";if(s<604800)return Math.round(s/86400)+"d ago";return Math.round(s/604800)+"w ago"}
+function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Invalid or missing viewer token.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
+function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Invalid or missing viewer token.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Hermes","error","Approval decision failed: "+err.message);refreshState();})}
 function mapState(state){
   A=(state.agents||[]).map(mapAgent);
   var k=state.kpis||{};
@@ -404,7 +407,10 @@ function mapState(state){
   S.cost=(state.cost_forecast&&state.cost_forecast.daily&&state.cost_forecast.daily.length)?(state.cost_forecast.daily[0].cost_usd||0):(k.total_cost_usd||0); /* spend TODAY (most recent day bucket), not lifetime total */
   S.budget=(state.cost_forecast&&state.cost_forecast.budget_usd)||BUD;BUD=S.budget;
   S.calls=state.tool_counts||{};
-  MEM={};A.forEach(function(a){MEM[a.n]=[];});
+  var topFacts=(state.memory&&state.memory.facts)||[];
+  var memByName={};(state.agents||[]).forEach(function(ra){memByName[ra.name]=(ra.memory&&ra.memory.facts)||[];});
+  MEM={};A.forEach(function(a){var facts=memByName[a.n]||[];if(!facts.length&&a.n==="ceo")facts=topFacts;MEM[a.n]=facts.map(function(f){return [f.text,f.age!=null?ageAgo(f.age):(f.age_s!=null?ageAgo(f.age_s):"")]});});
+  AP=(state.approvals||[]).map(function(x){return {id:x.id,ag:x.agent,text:x.action,risk:x.risk||"med",t:fmtT(x.requested_at)}});
   trackTps(state);
   syncAlerts(state.alerts||[]);
   renderLog(state.events||[]);
@@ -507,6 +513,7 @@ async function connect(){
   }catch(e){setConn("reconnecting");}
 }
 function bootLive(){
+  LIVE=true;
   var saved=null;try{saved=sessionStorage.getItem(TOKEN_KEY);}catch(e){}
   $("gateform").addEventListener("submit",function(e){e.preventDefault();var v=$("tok").value.trim();if(!v)return;token=v;try{sessionStorage.setItem(TOKEN_KEY,v);}catch(err){} hideGate();connect();});
   setInterval(function(){clock();updateAge();},1000);

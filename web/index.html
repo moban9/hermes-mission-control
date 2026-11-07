@@ -35,8 +35,8 @@ main{max-width:1180px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-temp
 .kpi span{color:var(--mu);font-size:12px}
 .kpi i{font-style:normal;font-size:12px}
 .up{color:var(--gr)}.dn{color:var(--rd)}
-.topo{grid-column:1/-1}.agents{grid-column:1/-1}.queue{grid-column:1/-1}.logs{grid-column:1/-1}.perf{grid-column:1/-1}.tools{grid-column:1/-1}
-@media(min-width:760px){.kpis{grid-template-columns:repeat(5,1fr)}.topo{grid-column:span 7}.queue{grid-column:span 5}.agents{grid-column:span 12}.logs{grid-column:span 7}.perf{grid-column:span 5}.tools{grid-column:span 12}}
+.topo{grid-column:1/-1}.agents{grid-column:1/-1}.queue{grid-column:1/-1}.perf{grid-column:1/-1}.tools{grid-column:1/-1}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(5,1fr)}.topo{grid-column:span 7}.queue{grid-column:span 5}.agents{grid-column:span 12}.perf{grid-column:span 12}.tools{grid-column:span 12}}
 svg text{font-family:Sora,system-ui,sans-serif}
 #topo{width:100%;height:auto;display:block}
 .link{stroke:var(--line);stroke-width:1.2}
@@ -103,7 +103,7 @@ svg text{font-family:Sora,system-ui,sans-serif}
 input[type=range]{accent-color:var(--cy);margin:8px 0}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* --- live data layer additions (token gate + full-page empty state) --- */
-.gate{position:fixed;inset:0;z-index:50;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(10px);display:grid;place-items:center;padding:16px}
+.gate{position:fixed;inset:0;z-index:2000;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(10px);display:grid;place-items:center;padding:16px}
 .gate.hidden{display:none}
 .gate-card{max-width:400px;width:100%}
 .gate-card h2{font-size:18px;margin-bottom:6px}
@@ -130,6 +130,13 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 }
 .card.logs h2{color:var(--vi);margin:0 0 8px}
 .card.logs h2 small{color:var(--mu)}
+.card.logs h2 .logs-toggle{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;padding:0;background:transparent;border:1px solid var(--line);border-radius:7px;color:var(--mu);cursor:pointer}
+.card.logs h2 .logs-toggle:hover{color:var(--vi);border-color:var(--vi)}
+.card.logs h2 .logs-toggle svg{display:block;transition:transform .18s ease}
+.card.logs.collapsed h2 .logs-toggle svg{transform:rotate(180deg)}
+.card.logs.collapsed .logs-body{display:none}
+.card.logs.collapsed h2{margin:0}
+.card.logs.collapsed{max-height:none}
 #log{max-height:calc(42vh - 46px);height:auto;overflow-y:auto}
 @media(max-width:760px){.card.logs{top:auto;bottom:10px;right:8px;left:8px;width:auto;max-height:34vh}#log{max-height:calc(34vh - 46px)}}
 </style>
@@ -161,10 +168,16 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
     <div class="grid" id="agents"></div>
   </section>
 
-  <section class="card logs">
-    <h2>Live event stream</h2>
-    <div class="chips" id="chips"></div>
-    <div id="log" class="mono"></div>
+  <section class="card logs" id="logsCard">
+    <h2>Live event stream
+      <button class="logs-toggle" id="logsToggle" type="button" aria-label="Toggle live event stream" aria-expanded="true" aria-controls="logsBody">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </h2>
+    <div class="logs-body" id="logsBody">
+      <div class="chips" id="chips"></div>
+      <div id="log" class="mono"></div>
+    </div>
   </section>
 
   <section class="card perf">
@@ -243,7 +256,19 @@ function drawTopo(){
   s+='<ellipse cx="200" cy="125" rx="140" ry="88" fill="none" stroke="var(--line)" stroke-dasharray="2 6"/>';
   A.forEach(function(a,i){var p=pos[i];s+='<line class="link" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>';if(a.s==="running"||a.s==="thinking")s+='<line class="flow" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>'});
   s+='<circle class="ring" cx="200" cy="125" r="34" fill="var(--cy)" opacity=".18"/><circle cx="200" cy="125" r="26" fill="url(#g)"/><text x="200" y="129" text-anchor="middle" font-size="11" font-weight="700" fill="#05101f">Hermes</text>';
-  A.forEach(function(a,i){var p=pos[i],c=cols[a.s]||"var(--mu)";s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="var(--bg2)" stroke="'+c+'" stroke-width="2"/>'+(a.s==="running"?'<circle class="ring" cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="'+c+'" opacity=".25"/>':'')+'<text x="'+p[0]+'" y="'+(p[1]+3.5)+'" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--tx)">'+a.n+'</text><text x="'+p[0]+'" y="'+(p[1]+(p[1]>125?36:-27))+' " text-anchor="middle" font-size="9" fill="var(--mu)">'+whatDoing(a)+'</text>'});';
+  A.forEach(function(a,i){
+    var p=pos[i],c=cols[a.s]||"var(--mu)";
+    var full=whatDoing(a);
+    var busy=(a.s==="running"||a.s==="thinking"||a.s==="waiting"||a.s==="error");
+    var lbl=busy?full:"";
+    if(lbl.length>12)lbl=lbl.slice(0,11)+"\u2026";
+    s+='<g><title>'+a.n+' \u00b7 '+a.s+(busy?' \u00b7 '+full:'')+'</title>';
+    s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="var(--bg2)" stroke="'+c+'" stroke-width="2"/>';
+    if(a.s==="running")s+='<circle class="ring" cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="'+c+'" opacity=".25"/>';
+    s+='<text x="'+p[0]+'" y="'+(p[1]+3.5)+'" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--tx)">'+a.n+'</text>';
+    if(lbl)s+='<text x="'+p[0]+'" y="'+(p[1]+(p[1]>125?36:-27))+'" text-anchor="middle" font-size="8" fill="var(--mu)">'+lbl+'</text>';
+    s+='</g>';
+  });
   $("topo").innerHTML=s;
 }
 function drawAgents(){
@@ -307,12 +332,21 @@ function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textCont
 $("agents").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var a=A[+b.dataset.i];if(a.s=="paused"){a.s="running";log(a.n,"info","Resumed by operator")}else{a.s="paused";a.act="Paused by operator";log(a.n,"warn","Paused by operator")}drawAll()});
 $("pauseAll").addEventListener("click",function(){S.paused=!S.paused;document.body.classList.toggle("paused",S.paused);$("pauseAll").textContent=S.paused?"Resume all":"Pause all";$("livet").textContent=S.paused?"Paused":"Live";log("Hermes",S.paused?"warn":"info",S.paused?"All agents on hold":"All agents resumed")});
 $("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+'</button>'}).join("");
-$("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});[].forEach.call($("log").children,function(r){r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter})});
+$("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});[].forEach.call($("log").children,function(r){if(!r.dataset.fhint)r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter});var vis=[].filter.call($("log").children,function(r){return !r.hidden&&!r.dataset.fhint}).length;var h=$("log").querySelector("[data-fhint]");if(!vis&&!h){var d=document.createElement("div");d.dataset.fhint="1";d.className="empty";d.textContent="No "+S.filter+" events in the current window.";$("log").appendChild(d);}else if(vis&&h){h.remove();}});
 $("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;if(LIVE){decideApproval(id,ok);return;}var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a&&a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a&&a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});
 $("alerts").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;DM[b.dataset.k]=Date.now();delete AL[b.dataset.k];drawAlerts()});
 $("mtabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.c){var a=A[sel];a.cx.hist=Math.round(a.cx.hist*.25);a.cx.tools=Math.round(a.cx.tools*.4);log(a.n,"info","Context compacted by operator");unraise("ctx"+sel);drawMem();return}sel=+b.dataset.i;drawTabs();drawMem()});
 $("rng").addEventListener("input",function(){var v=+this.value;rp=v>=H.length-1?null:v;drawReplay()});
 $("live").addEventListener("click",function(){rp=null;$("rng").value=H.length-1;drawReplay()});
+
+/* --- overlay collapse/expand (remembered per tab via sessionStorage) --- */
+(function(){
+  var KEY="mc_logs_collapsed",card=$("logsCard"),btn=$("logsToggle");
+  function apply(c){card.classList.toggle("collapsed",c);btn.setAttribute("aria-expanded",c?"false":"true");}
+  var saved=null;try{saved=sessionStorage.getItem(KEY);}catch(e){}
+  apply(saved==="1");
+  btn.addEventListener("click",function(){var c=!card.classList.contains("collapsed");apply(c);try{sessionStorage.setItem(KEY,c?"1":"0");}catch(e){}});
+})();
 
 /* ------------------------------------------------------------------------- *
  * DEMO MODE (kept verbatim from the prototype for ?demo=1 design work)        *
@@ -416,15 +450,26 @@ function syncAlerts(list){
   Object.keys(AL).forEach(function(k){if(!seen[k])delete AL[k]});
   drawAlerts();
 }
+var seenLog={};
 function renderLog(events){
   var list=(events||[]).filter(function(e){return e.tool_name||e.text;}).slice().reverse().slice(-80);
-  var L=$("log");L.innerHTML="";
-  list.forEach(function(e){var m=e.tool_name?(e.text?e.tool_name+": "+e.text:e.tool_name):e.text;logAt(e.agent||"?","info",m,fmtT(e.ts));});
+  var L=$("log"),added=0;
+  list.forEach(function(e){
+    var m=e.tool_name?(e.text?e.tool_name+": "+e.text:e.tool_name):e.text;
+    var key=(e.ts||"")+"|"+(e.agent||"")+"|"+m.slice(0,60);
+    if(seenLog[key])return;
+    seenLog[key]=1;
+    logAt(e.agent||"?",e.level||"info",m,fmtT(e.ts));
+    added++;
+  });
+  if(added)while(L.children.length>80)L.removeChild(L.firstChild);
+  if(!L.children.length&&!L.dataset.empty){L.dataset.empty="1";L.innerHTML='<div class="empty" data-empty="1">No activity yet \u2014 events appear as agents work.</div>';}
+  else if(added&&L.dataset.empty){delete L.dataset.empty;var e0=L.querySelector('[data-empty]');if(e0)e0.remove();}
   L.scrollTop=L.scrollHeight;
 }
 function ageAgo(s){if(s==null||!isFinite(s))return "";s=+s;if(s<60)return "just now";if(s<3600)return Math.round(s/60)+"m ago";if(s<86400)return Math.round(s/3600)+"h ago";if(s<604800)return Math.round(s/86400)+"d ago";return Math.round(s/604800)+"w ago"}
-function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Invalid or missing viewer token.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
-function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Invalid or missing viewer token.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Hermes","error","Approval decision failed: "+err.message);refreshState();})}
+function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
+function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Hermes","error","Approval decision failed: "+err.message);refreshState();})}
 function mapState(state){
   A=(state.agents||[]).map(mapAgent);
   var k=state.kpis||{};
@@ -492,9 +537,9 @@ function updateAge(){
   if(!$("nobody").classList.contains("hidden"))$("nobodyage").textContent="last event "+age+"s ago";
 }
 function tokenQuery(){return token?("?token="+encodeURIComponent(token)):""}
-function showGate(msg){$("gateerr").textContent=msg||"";$("gate").classList.remove("hidden");$("tok").focus();}
-function hideGate(){$("gate").classList.add("hidden");}
-function rejectAuth(msg){stop();token=null;try{sessionStorage.removeItem(TOKEN_KEY);}catch(e){} $("tok").value="";showGate(msg||"Invalid or missing viewer token.");}
+function showGate(msg){$("gateerr").textContent=msg||"";var lo=document.querySelector(".card.logs");if(lo)lo.style.display="none";$("gate").classList.remove("hidden");$("tok").focus();}
+function hideGate(){$("gate").classList.add("hidden");var lo=document.querySelector(".card.logs");if(lo)lo.style.display="";}
+function rejectAuth(msg){stop();token=null;try{sessionStorage.removeItem(TOKEN_KEY);}catch(e){} $("tok").value="";showGate(msg||"Token not accepted. If it was rotated, enter the current one \u2014 a stale saved token is discarded automatically.");}
 function stop(){if(es){es.close();es=null;}if(snapTimer){clearInterval(snapTimer);snapTimer=null;}if(stateTimer){clearInterval(stateTimer);stateTimer=null;}}
 function ensureSSE(){
   if(es)return;
@@ -524,7 +569,7 @@ function onSSEEvent(e){try{var v=JSON.parse(e.data);if(v&&v.agent){logAt(v.agent
 async function connect(){
   try{
     var r=await fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"});
-    if(r.status===401){rejectAuth("Invalid or missing viewer token.");return;}
+    if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return;}
     if(!r.ok)throw new Error("http "+r.status);
     var state=await r.json();
     lastEventAt=Date.now();

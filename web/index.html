@@ -341,7 +341,7 @@ function resolveTopoCollisions(){
 /* re-run once the Sora webfont is ready, so label placement uses final glyph widths */
 if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resolveTopoCollisions);}
 function drawAgents(){
-  $("agents").innerHTML=A.map(function(a,i){return '<div class="ag '+a.s+'"><div class="top"><span class="nm">'+a.n+'</span><span class="badge">'+a.s+'</span></div><div class="role">'+a.r+'</div><div class="now">'+a.act+'</div><div class="meta mono"><span>'+a.task.id+'</span></div></div>'}).join("");
+  $("agents").innerHTML=A.map(function(a,i){return '<div class="ag '+a.s+'"><div class="top"><span class="nm">'+a.n+'</span><span class="badge">'+a.s+'</span></div><div class="role">'+a.r+'</div><div class="now">'+a.act+'</div><div class="meta mono"><span>'+a.task.id+'</span><span>'+shortTok(a.tok)+' tok</span><span>$'+(a.cost||0).toFixed(2)+'</span></div></div>'}).join("");
 }
 function drawTasks(){
   var T=S.tasks||[],byId={};T.forEach(function(t){byId[t.id]=t;});
@@ -648,7 +648,8 @@ function mapAgent(raw){
   var act=raw.current_action||raw.last_activity_description||"idle";
   return {n:raw.name,r:ROLE[raw.name]||raw.name,s:st,
     task:{id:shortId(raw.active_session_id),t:title,p:PROG[raw.status]||0},
-    tok:(raw.tokens&&raw.tokens.total)||0,act:act,cx:estimateCx(raw.tokens||{}),err:0,la:act};
+    tok:(raw.tokens&&raw.tokens.total)||(raw.tokens?((raw.tokens.input||0)+(raw.tokens.output||0)+(raw.tokens.cache_read||0)):0),
+    cost:raw.cost_usd||0,act:act,cx:estimateCx(raw.tokens||{}),err:0,la:act};
 }
 function trackTps(state){
   var k=state.kpis||{};

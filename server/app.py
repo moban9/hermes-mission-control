@@ -425,7 +425,7 @@ def v1_events(payload: Any = Body(...),
             for ev in events:
                 if not isinstance(ev, dict) or not ev.get("id"):
                     continue
-                if not ev.get("agent_id"):
+                if str(ev.get("agent_id") or "").lower() in ("", "none", "agent", "unknown"):
                     _d = ev.get("data") if isinstance(ev.get("data"), dict) else {}
                     ev["agent_id"] = _resolve_agent(ev.get("session_id") or _d.get("session_id"))
                 if db.insert_event(con, ev) > 0:

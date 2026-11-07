@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hermes mission control</title>
+<title>Onendo mission control</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{--bg:#060914;--bg2:#0a1124;--panel:rgba(16,24,48,.72);--line:rgba(110,190,255,.16);--tx:#e8efff;--mu:#8a97b8;--cy:#4de1ff;--vi:#a58bff;--gr:#43f0b0;--am:#ffbd59;--rd:#ff5d7a;--glow:rgba(77,225,255,.18);
@@ -159,7 +159,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 <body>
 <header id="hdr">
   <div class="logo">H</div>
-  <div><h1>Hermes mission control</h1><div class="sub mono" id="clock">session 00:00:00</div></div>
+  <div><h1>Onendo mission control</h1><div class="sub mono" id="clock">session 00:00:00</div></div>
   <div class="sp"></div>
   <div class="live"><span class="dot"></span><span id="livet">Live</span></div>
 </header>
@@ -167,8 +167,8 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   <section class="kpis" id="kpis"></section>
 
   <section class="card topo">
-    <h2>Agent network <small>Hermes orchestrator and subagents</small></h2>
-    <svg id="topo" viewBox="0 0 400 250" role="img" aria-label="Network of Hermes and its subagents"></svg>
+    <h2>Agent network <small>Onendo orchestrator and subagents</small></h2>
+    <svg id="topo" viewBox="0 0 400 250" role="img" aria-label="Network of Onendo and its subagents"></svg>
   </section>
 
   <section class="card queue">
@@ -269,7 +269,7 @@ function drawTopo(){
   A.forEach(function(a,i){var ang=-Math.PI/2+i*2*Math.PI/Math.max(1,A.length);pos.push([cx+Math.cos(ang)*140,cy+Math.sin(ang)*88])});
   s+='<ellipse cx="200" cy="125" rx="140" ry="88" fill="none" stroke="var(--line)" stroke-dasharray="2 6"/>';
   A.forEach(function(a,i){var p=pos[i];s+='<line class="link" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>';if(a.s==="running"||a.s==="thinking")s+='<line class="flow" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>'});
-  s+='<circle class="ring" cx="200" cy="125" r="34" fill="var(--cy)" opacity=".18"/><circle cx="200" cy="125" r="26" fill="url(#g)"/><text x="200" y="129" text-anchor="middle" font-size="11" font-weight="700" fill="#05101f">Hermes</text>';
+  s+='<circle class="ring" cx="200" cy="125" r="34" fill="var(--cy)" opacity=".18"/><circle cx="200" cy="125" r="26" fill="url(#g)"/><text x="200" y="129" text-anchor="middle" font-size="11" font-weight="700" fill="#05101f">Onendo</text>';
   A.forEach(function(a,i){
     var p=pos[i],c=cols[a.s]||"var(--mu)";
     var full=whatDoing(a);
@@ -350,7 +350,7 @@ function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Noth
 function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
 function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div>'}
 function drawReplay(){var n=H.length,cur=rp===null?n-1:rp,s="";H.forEach(function(h,j){h.st.forEach(function(st,i){s+='<rect x="'+j*3+'" y="'+i*12+'" width="2.6" height="11" rx="1" fill="'+cols[st]+'"/>'})});s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="60" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';$("heat").innerHTML=s;var h=H[cur];if(!h){$("rpt").textContent="Live";$("rpa").innerHTML="";$("rpi").textContent="";return;}$("rpt").textContent=rp===null?"Live":"Viewing "+h.t;$("rpa").innerHTML=A.map(function(a,i){return '<span class="chip on" style="color:'+cols[h.st[i]]+'">'+a.n+': '+h.st[i]+', '+h.tk[i]+'</span>'}).join("");$("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals"}
-function drawFc(){var n=H.length;if(n<2){$("fcs").textContent="Collecting cost history";$("fct").innerHTML='<div class="empty">Not enough history yet \u2014 snapshots are recorded every 30s.</div>';return;}var L=H[n-1],k=Math.min(10,n-1),burn=(L.cost-H[n-1-k].cost)/k*120,proj=S.cost+burn*HL,mx=Math.max(BUD,proj)*1.1,T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");$("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(L.cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';var over=proj>BUD*.9;$("fcs").textContent=over?"Over budget risk":"On track";$("fct").innerHTML='<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div><div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div><div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>';if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Hermes")}
+function drawFc(){var n=H.length;if(n<2){$("fcs").textContent="Collecting cost history";$("fct").innerHTML='<div class="empty">Not enough history yet \u2014 snapshots are recorded every 30s.</div>';return;}var L=H[n-1],k=Math.min(10,n-1),burn=(L.cost-H[n-1-k].cost)/k*120,proj=S.cost+burn*HL,mx=Math.max(BUD,proj)*1.1,T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");$("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(L.cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';var over=proj>BUD*.9;$("fcs").textContent=over?"Over budget risk":"On track";$("fct").innerHTML='<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div><div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div><div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>';if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Onendo")}
 
 function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textContent="session "+pad(Math.floor(t/3600))+":"+pad(Math.floor(t%3600/60))+":"+pad(t%60)}
 
@@ -431,7 +431,7 @@ function demoMode(){
   }
   $("rng").max=H.length-1;$("rng").value=H.length-1;
   drawTabs();drawMem();drawAlerts();drawAppr();drawReplay();drawFc();setInterval(tick2,1300);
-  log("Hermes","info","Mission started, 5 subagents online");log("Hermes","info","Plan split into "+(A.length+S.queued)+" tasks");
+  log("Onendo","info","Mission started, 5 subagents online");log("Onendo","info","Plan split into "+(A.length+S.queued)+" tasks");
   drawAll();setInterval(tick,1300);setInterval(clock,1000);clock();
 }
 
@@ -497,7 +497,7 @@ function renderLog(events){
 }
 function ageAgo(s){if(s==null||!isFinite(s))return "";s=+s;if(s<60)return "just now";if(s<3600)return Math.round(s/60)+"m ago";if(s<86400)return Math.round(s/3600)+"h ago";if(s<604800)return Math.round(s/86400)+"d ago";return Math.round(s/604800)+"w ago"}
 function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
-function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Hermes","error","Approval decision failed: "+err.message);refreshState();})}
+function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Onendo","error","Approval decision failed: "+err.message);refreshState();})}
 function mapState(state){
   A=(state.agents||[]).map(mapAgent);
   var k=state.kpis||{};

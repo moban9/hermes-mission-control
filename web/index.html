@@ -67,7 +67,13 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .col b{display:block;font-size:20px}.col span{font-size:11.5px;color:var(--mu)}
 .task{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;padding:9px 0;border-top:1px solid var(--line);align-items:center}
 .task .id{color:var(--mu);font-size:11.5px}
-.task.approval{border-left:3px solid var(--am);background:color-mix(in srgb,var(--am) 10%,transparent)}
+.task.approval{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;margin:4px 0;
+  border-left:3px solid var(--am);border-radius:10px;background:color-mix(in srgb,var(--am) 10%,transparent)}
+.task.approval .tt{flex:1 1 200px;min-width:0}
+.task.approval .apacts{margin-left:auto;display:flex;gap:8px;flex:0 0 auto}
+.task.approval .apbtn{min-height:30px;min-width:78px;font:600 12px system-ui;border-radius:8px;cursor:pointer}
+.task.approval .apbtn.ok{background:#2f9e5f;color:#fff;border:0}
+.task.approval .apbtn.no{background:none;color:var(--rd);border:1px solid var(--rd)}
 .task.approval .tt{color:var(--am);white-space:normal}
 .task .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .task .bar{grid-column:2/4}
@@ -138,7 +144,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 
 /* --- live event stream: floating overlay above all panels --- */
 .card.logs{
-  position:fixed; top:64px; right:16px; width:min(430px,92vw); max-height:min(62vh,560px);
+  position:fixed; bottom:16px; left:16px; right:auto; top:auto; width:min(430px,92vw); max-height:min(52vh,440px);
   z-index:2147483000; display:flex; flex-direction:column; padding:0;
   background:#0b0e17; border:1px solid var(--vi);
   box-shadow:0 18px 50px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.5);
@@ -347,9 +353,9 @@ function drawTasks(){
     return '<div class="task approval"><span class="id mono">AWAIT</span>'+
       '<span class="tt">Approval: '+String(a.text||"").replace(/[<>]/g,"")+'</span>'+
       '<span class="badge" style="font-size:10.5px;padding:1px 8px">'+a.ag+' \u00b7 '+a.risk+' risk</span>'+
-      '<span style="display:flex;gap:6px;margin-left:auto">'+
-        '<button class="apbtn ok" data-ok="1" data-ap="'+a.id+'" style="padding:4px 10px;border-radius:7px;border:0;cursor:pointer;font:600 11px system-ui;background:#2f9e5f;color:#fff">Approve</button>'+
-        '<button class="apbtn no" data-ok="0" data-ap="'+a.id+'" style="padding:4px 10px;border-radius:7px;border:1px solid var(--rd);cursor:pointer;font:600 11px system-ui;background:none;color:var(--rd)">Deny</button>'+
+      '<span class="apacts">'+
+        '<button class="apbtn ok" data-ok="1" data-ap="'+a.id+'" >Approve</button>'+
+        '<button class="apbtn no" data-ok="0" data-ap="'+a.id+'" >Deny</button>'+
       '</span></div>';
   }).join("");
   $("tasks").innerHTML=(_apRows||order.length)?_apRows+order.map(function(k){
@@ -479,7 +485,9 @@ $("live").addEventListener("click",function(){rp=null;$("rng").value=H.length-1;
   function apply(c){card.classList.toggle("collapsed",c);btn.setAttribute("aria-expanded",c?"false":"true");
     var lb=$("logsToggleLabel");if(lb)lb.textContent=c?"show":"hide";}
   var saved=null;try{saved=sessionStorage.getItem(KEY);}catch(e){}
-  apply(saved==="1");
+  /* Starts collapsed: an expanded panel docked over the right column sits on top of
+     the pipeline's Approve/Deny buttons and swallows the clicks. */
+  apply(saved===null?true:saved==="1");
   function toggleLogs(){var c=!card.classList.contains("collapsed");apply(c);
     try{sessionStorage.setItem(KEY,c?"1":"0");}catch(e){}}
   btn.addEventListener("click",function(ev){ev.stopPropagation();toggleLogs();});
@@ -743,7 +751,7 @@ if(/[?&]demo=1/.test(location.search)){demoMode();}else{bootLive();}
 (function(){
   var card=document.getElementById('logsCard');
   if(!card)return;
-  var KEY='mc_logs_pos';
+  var KEY='mc_logs_pos_v2';
   function clamp(x,y){
     var w=card.offsetWidth||380, h=card.offsetHeight||200;
     return [Math.max(4,Math.min(window.innerWidth-w-4,x)), Math.max(4,Math.min(window.innerHeight-40,y))];
@@ -761,12 +769,12 @@ if(/[?&]demo=1/.test(location.search)){demoMode();}else{bootLive();}
   /* No saved position: sit BELOW the KPI row so the overlay never covers the KPI cards.
      A saved/dragged position always wins. */
   function placeDefault(){
-    var y=4, kpis=document.getElementById('kpis');
-    if(kpis){var b=kpis.getBoundingClientRect().bottom;if(isFinite(b))y=b+12;}
-    y=clamp(0,y)[1];
-    card.style.setProperty('top',y+'px','important');
-    card.style.setProperty('bottom','auto','important');
-    /* leave left/right to the stylesheet: right-anchored on desktop, full-width on mobile */
+    /* Dock bottom-right: the pipeline's Approve/Deny buttons live in the top-right
+       card, and a top-right overlay sat on top of them and swallowed the clicks. */
+    card.style.setProperty('top','auto','important');
+    card.style.setProperty('bottom','16px','important');
+    card.style.setProperty('left','16px','important');
+    card.style.setProperty('right','auto','important');
   }
   /* Expose for the data layer: the KPI row only gains height once /v1/state renders,
      so the no-saved-position default must be re-clamped after every KPI draw. */

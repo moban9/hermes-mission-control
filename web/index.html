@@ -186,6 +186,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
     <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Agent network <small>Onendo orchestrator and subagents</small>
       <button id="checkStuck" type="button" title="Compare open sessions against kanban cards" style="margin-left:auto;padding:5px 10px;font:600 11px/1 system-ui;color:var(--cy);background:none;border:1px solid color-mix(in srgb,var(--cy) 45%,transparent);border-radius:8px;cursor:pointer">Check stuck</button></h2>
     <svg id="topo" viewBox="0 0 400 250" role="img" aria-label="Network of Onendo and its subagents"></svg>
+    <div id="stuckReport" style="display:none;margin-top:8px;font-size:11.5px;line-height:1.5;max-height:150px;overflow-y:auto"></div>
   </section>
 
   <section class="card queue">
@@ -365,6 +366,19 @@ function drawTasks(){
   }).join(""):'<div class="empty">No active tasks.</div>';
   $("qsum").textContent=active.length+" active"+((AP&&AP.length)?" \u00b7 "+AP.length+" awaiting approval":"");
 }
+function renderStuck(d){
+  var box=$("stuckReport"),btn=$("checkStuck");if(!box)return;
+  var att=(d&&d.needs_attention)||[],cols={stuck:"var(--rd)",blocked:"var(--am)","stale-session":"var(--mu)",working:"var(--cy)",idle:"var(--mu)"};
+  box.style.display="block";
+  box.innerHTML=att.length
+    ? '<div style="color:var(--tx);font-weight:600;margin-bottom:4px">'+att.length+' need attention <span style="color:var(--mu);font-weight:400">of '+d.agents.length+'</span></div>'+
+      att.map(function(a){return '<div style="display:flex;gap:6px;padding:2px 0;border-bottom:1px solid var(--line)">'+
+        '<b style="color:'+(cols[a.verdict]||"var(--tx)")+';min-width:86px;flex:none">'+a.agent+'</b>'+
+        '<span style="color:'+(cols[a.verdict]||"var(--tx)")+';min-width:82px;flex:none">'+a.verdict+'</span>'+
+        '<span style="color:var(--mu);overflow:hidden;text-overflow:ellipsis">'+String(a.reason||"").replace(/[<>]/g,"")+'</span></div>';}).join("")
+    : '<div style="color:var(--ok,#2f9e5f)">All agents consistent \u2014 no stuck sessions, no blocked cards.</div>';
+  if(btn)btn.textContent=att.length?("Check stuck \u00b7 "+att.length):"Check stuck";
+}
 function wireTaskApprovals(){
   var box=$("tasks");if(!box||box.dataset.apwired)return;box.dataset.apwired="1";
   box.addEventListener("click",function(e){var b=e.target.closest(".apbtn");if(!b)return;
@@ -462,8 +476,9 @@ $("chips").insertAdjacentHTML("afterend",'<div id="logEmpty">No events at this l
       log("system",att.length?"warn":"info","Stuck check: "+d.agents.length+" agents, "+att.length+" need attention");
       att.slice(0,8).forEach(function(a){log(a.agent,a.verdict==="blocked"?"warn":"error",a.verdict+" \u2014 "+a.reason);});
       if(!att.length)log("system","info","All agents consistent: no stuck sessions, no blocked cards.");
+      renderStuck(d);
     }).catch(function(e){log("system","error","Stuck check failed: "+e);})
-    .then(function(){b.disabled=false;b.textContent=old;});
+    .then(function(){b.disabled=false;if(!$("stuckReport")||!$("stuckReport").innerText.trim())b.textContent=old;});
   });})();
 wireTaskApprovals();
 function chipCounts(){

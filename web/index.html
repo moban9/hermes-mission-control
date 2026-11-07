@@ -377,8 +377,26 @@ function renderStuck(d){
         '<span style="color:'+(cols[a.verdict]||"var(--tx)")+';min-width:82px;flex:none">'+a.verdict+'</span>'+
         '<span style="color:var(--mu);overflow:hidden;text-overflow:ellipsis">'+String(a.reason||"").replace(/[<>]/g,"")+'</span></div>';}).join("")
     : '<div style="color:var(--ok,#2f9e5f)">All agents consistent \u2014 no stuck sessions, no blocked cards.</div>';
+  if(att.length)box.insertAdjacentHTML("beforeend",
+    '<button id="resolveStuck" type="button" style="margin-top:8px;padding:6px 12px;font:600 11.5px system-ui;color:#04111c;background:var(--am);border:0;border-radius:8px;cursor:pointer">Resolve '+att.length+' \u2014 close stale sessions</button>');
   if(btn)btn.textContent=att.length?("Check stuck \u00b7 "+att.length):"Check stuck";
 }
+function resolveStuck(){
+  var b=$("resolveStuck"); if(b){b.disabled=true;b.textContent="Resolving\u2026";}
+  fetch("/v1/agents/stuck/resolve"+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({min_idle_min:30})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var n=(d.closed||[]).length, names=[...new Set((d.closed||[]).map(function(c){return c.agent;}))];
+      log("system","info","Resolve: closed "+n+" stale session(s)"+(names.length?" ("+names.join(", ")+")":""));
+      return fetch("/v1/agents/stuck"+tokenQuery()).then(function(r){return r.json();}).then(function(dd){
+        renderStuck(dd);
+        var box=$("stuckReport");
+        if(box)box.insertAdjacentHTML("afterbegin",'<div style="color:var(--ok,#2f9e5f);margin-bottom:4px">Closed '+n+' stale session(s)'+(names.length?": "+names.join(", "):"")+'.</div>');
+      });
+    })
+    .catch(function(e){log("system","error","Resolve failed: "+e);});
+}
+document.addEventListener("click",function(e){if(e.target&&e.target.id==="resolveStuck"){e.preventDefault();resolveStuck();}});
 function wireTaskApprovals(){
   var box=$("tasks");if(!box||box.dataset.apwired)return;box.dataset.apwired="1";
   box.addEventListener("click",function(e){var b=e.target.closest(".apbtn");if(!b)return;

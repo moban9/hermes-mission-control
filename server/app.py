@@ -515,6 +515,73 @@ def v1_agents_stuck(_auth: None = Depends(_auth)) -> dict:
             "needs_attention": [a for a in out if a["verdict"] in ("stuck", "blocked", "stale-session")]}
 
 
+@app.post("/v1/agents/stuck/resolve")
+def v1_agents_stuck_resolve(body: dict | None = Body(default=None),
+                            _auth: None = Depends(_auth)) -> dict:
+    """Close stale sessions so agents stop reading as stuck.
+
+    Only sessions that are open, idle beyond ``min_idle_min`` (default 30) and
+    belong to an agent with no running kanban card are touched.  Everything else
+    is reported and left alone — an active worker must never lose its session.
+    """
+    import sqlite3
+    body = body or {}
+    try:
+        min_idle = float(body.get("min_idle_min", 30))
+    except Exception:
+        min_idle = 30.0
+    dry = bool(body.get("dry_run"))
+    now = time.time()
+
+    running_agents = set()
+    try:
+        kc = sqlite3.connect(f"file:{db.KANBAN_DB}?mode=ro", uri=True, timeout=5.0)
+        try:
+            for r in kc.execute("SELECT assignee FROM tasks WHERE status='running'"):
+                if r[0]:
+                    running_agents.add(r[0])
+        finally:
+            kc.close()
+    except Exception:
+        pass
+
+    repaired, skipped = [], []
+    for name, path in db.profiles():
+        who = "ceo" if name == "ceo" else name
+        try:
+            sc = sqlite3.connect(path, timeout=7.0)
+            try:
+                rows = sc.execute(
+                    "SELECT id, last_activity_at FROM sessions "
+                    "WHERE ended_at IS NULL ORDER BY last_activity_at DESC").fetchall()
+                for sid, last in rows:
+                    idle_min = (now - (last or 0)) / 60.0
+                    if idle_min < min_idle:
+                        skipped.append({"agent": who, "session": sid[:16],
+                                        "why": f"active {idle_min:.0f} min ago"})
+                        continue
+                    if who in running_agents:
+                        skipped.append({"agent": who, "session": sid[:16],
+                                        "why": "agent has a running card"})
+                        continue
+                    if not dry:
+                        sc.execute("UPDATE sessions SET ended_at=?, end_reason='mc_reconciled' "
+                                   "WHERE id=? AND ended_at IS NULL", (now, sid))
+                if not dry:
+                    sc.commit()
+            finally:
+                sc.close()
+            if not dry:
+                repaired.extend({"agent": who, "session": r[0][:16]} for r in rows
+                                if (now - (r[1] or 0)) / 60.0 >= min_idle
+                                and who not in running_agents)
+        except Exception as exc:
+            skipped.append({"agent": who, "why": f"write failed: {exc}"[:120]})
+
+    return {"ok": True, "dry_run": dry, "closed": repaired, "skipped": skipped,
+            "min_idle_min": min_idle}
+
+
 @app.get("/v1/approvals")
 def v1_approvals(_auth: None = Depends(_auth)) -> dict:
     """Pending approvals (viewer auth)."""

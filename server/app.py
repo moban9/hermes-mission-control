@@ -451,6 +451,21 @@ def v1_approvals(_auth: None = Depends(_auth)) -> dict:
     return {"approvals": db.list_pending_approvals()}
 
 
+def _log_decision(identifier: str, status: str, decided_by: str,
+                  exc: str | None = None) -> None:
+    """Append every decision to a line-per-decision log (attribution)."""
+    try:
+        import os as _os
+        path = _os.path.join(_os.path.dirname(__file__), "..", "logs", "decisions.log")
+        _os.makedirs(_os.path.dirname(path), exist_ok=True)
+        with open(path, "a") as fh:
+            fh.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\t"
+                     f"{identifier}\t{status}\t{decided_by}"
+                     f"{'\t' + exc if exc else ''}\n")
+    except Exception:
+        pass
+
+
 @app.post("/v1/approvals/{identifier}")
 def v1_approval_decide(identifier: str, body: dict = Body(...),
                        _auth: None = Depends(_auth)) -> dict:
@@ -463,13 +478,15 @@ def v1_approval_decide(identifier: str, body: dict = Body(...),
     else:
         raise HTTPException(status_code=400, detail="decision must be 'approved' or 'denied'")
 
-    decided_by = str((body or {}).get("decided_by") or "operator")
+    decided_by = str((body or {}).get("decided_by") or "viewer-token").strip()
     try:
         updated = db.decide_approval(identifier, status, decided_by, time.time())
     except LookupError as exc:
+        _log_decision(identifier, status, decided_by, exc=str(exc))
         raise HTTPException(status_code=409, detail=str(exc))
     if updated is None:
         raise HTTPException(status_code=404, detail="approval not found")
+    _log_decision(identifier, status, decided_by)
 
     live.bump()  # fold into the SSE activity fingerprint
     broadcast_sse("approval", _approval_sse(updated))

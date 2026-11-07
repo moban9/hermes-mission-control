@@ -26,19 +26,34 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import db
 import discord
 import live
 import reducer
+import retention
 import settings
+import signing
 import tokens
 
 VIEWER_TOKEN = settings.VIEWER_TOKEN
 INGEST_TOKEN = settings.INGEST_TOKEN
 SNAPSHOT_INTERVAL_S = float(os.environ.get("MC_SNAPSHOT_INTERVAL_S", "30"))
+
+# Agent-control endpoint: the actions we accept (all 501 today) and the known
+# agent ids (CEO + the 16 bot profiles), resolved once at import.
+_VALID_COMMANDS = frozenset({"pause", "resume", "compact"})
+_KNOWN_AGENTS = frozenset(name for name, _ in db.profiles())
+_AGENT_CONTROL_501 = (
+    "agent control (pause/resume/compact) is not available in this build: "
+    "Mission Control has no write path into Hermes (its state.db reads are "
+    "strictly read-only by design), and the Hermes gateway exposes no "
+    "externally-addressable pause/resume/compact control — /pause and /compress "
+    "are in-session commands only, and the gateway control socket serves only "
+    "lifecycle verbs (identify/status/rescan/session-ticket)"
+)
 
 # Static dashboard (web/) is served at "/" from the same process.  Mounted
 # last so the API routes above win on exact matches; everything else falls
@@ -359,7 +374,7 @@ def _handle_approval_requested(ev: dict) -> None:
             con.close()
 
     # Never block ingest on Discord (background thread inside notifier).
-    discord.notify_approval(agent, action, risk)
+    discord.notify_approval(agent, action, risk, request_id=request_id)
 
     ap = db.get_approval(request_id)
     if ap:
@@ -428,6 +443,96 @@ def v1_approval_decide(identifier: str, body: dict = Body(...),
     live.bump()  # fold into the SSE activity fingerprint
     broadcast_sse("approval", _approval_sse(updated))
     return updated
+
+
+_APPROVE_WORDS = ("approve", "approved", "yes")
+_DENY_WORDS = ("deny", "denied", "reject", "rejected", "no")
+
+
+def _decision_page(message: str, ok: bool, code: int = 200) -> HTMLResponse:
+    """Tiny confirmation page for the signed one-click decision links."""
+    color = "#22d3ee" if ok else "#f43f5e"
+    glyph = "&#10003;" if ok else "&#10007;"
+    body = (
+        "<!doctype html><meta charset='utf-8'><title>Mission Control</title>"
+        "<body style='font-family:system-ui;background:#0b0f1a;color:#e6e6e6;"
+        "display:flex;align-items:center;justify-content:center;height:100vh;margin:0'>"
+        "<div style='text-align:center;padding:24px'>"
+        f"<div style='font-size:52px'>{glyph}</div>"
+        f"<div style='color:{color};font-size:22px;max-width:480px'>{message}</div>"
+        "</div></body>"
+    )
+    return HTMLResponse(body, status_code=code)
+
+
+@app.get("/v1/approvals/{identifier}/decide")
+def v1_approval_decide_link(identifier: str, decision: str = Query(...),
+                            sig: str = Query(...)) -> HTMLResponse:
+    """Signed one-click decision — the HMAC *is* the auth (no viewer token).
+
+    Lands from the Discord approval notification so Randy can Approve/Deny from
+    anywhere.  Signature binds ``request_id + decision``; a wrong/foreign sig is
+    rejected, and an already-decided approval reports that rather than 409-ing.
+    """
+    raw = (decision or "").strip().lower()
+    if raw in _APPROVE_WORDS:
+        status = "approved"
+    elif raw in _DENY_WORDS:
+        status = "rejected"
+    else:
+        return _decision_page("Decision must be 'approved' or 'denied'.",
+                              ok=False, code=400)
+
+    if not signing.verify(identifier, raw, sig):
+        return _decision_page("Invalid or expired approval link.",
+                              ok=False, code=403)
+
+    try:
+        updated = db.decide_approval(identifier, status, "discord-link", time.time())
+    except LookupError as exc:
+        return _decision_page(f"Approval already {exc}.", ok=False, code=409)
+    if updated is None:
+        return _decision_page("Approval not found.", ok=False, code=404)
+
+    live.bump()
+    broadcast_sse("approval", _approval_sse(updated))
+    label = "Approved" if status == "approved" else "Denied"
+    return _decision_page(
+        f"{label} — {updated.get('agent', '')} {updated.get('action', '')}",
+        ok=True,
+    )
+
+
+@app.post("/v1/agents/{agent_id}/command")
+def v1_agent_command(agent_id: str, body: dict = Body(default=None),
+                     _auth: None = Depends(_auth)) -> dict:
+    """Agent control command (viewer auth) — pause/resume/compact.
+
+    Honest by design: Mission Control has no write channel into Hermes, so a
+    command has no real effect in this build and returns **501** with the exact
+    reason rather than faking success.  The dashboard surfaces that reason.
+    """
+    action = str((body or {}).get("action") or "").strip().lower()
+    if action not in _VALID_COMMANDS:
+        raise HTTPException(status_code=400,
+                            detail=f"action must be one of {sorted(_VALID_COMMANDS)}")
+    if agent_id not in _KNOWN_AGENTS:
+        raise HTTPException(status_code=404, detail=f"unknown agent {agent_id!r}")
+    raise HTTPException(status_code=501, detail=_AGENT_CONTROL_501)
+
+
+@app.post("/v1/admin/prune")
+def v1_admin_prune(body: dict = Body(default=None),
+                   _auth: None = Depends(_auth)) -> dict:
+    """Run retention pruning (viewer auth).  Body: {"days": 14, "dry_run": false}.
+
+    Deletes snapshots/events/approvals older than ``days`` and reports
+    before/deleted counts per table.  Idempotent — safe to call from a cron.
+    """
+    body = body or {}
+    days = int(body.get("days", retention.RETENTION_DAYS))
+    dry_run = bool(body.get("dry_run", False))
+    return retention.prune(days=days, dry_run=dry_run)
 
 
 @app.get("/v1/approvals/{request_id}/wait")

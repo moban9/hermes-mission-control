@@ -52,6 +52,14 @@ VIEWER_TOKEN = get("MC_VIEWER_TOKEN", "")
 # Ingest token gates the emitter's event/approval long-poll endpoints.
 INGEST_TOKEN = get("MC_INGEST_TOKEN", "")
 
+# --- Signed approval links (one-click Approve/Deny from Discord) ------------
+# HMAC key for the signed one-click decision URLs.  Defaults to the ingest
+# token (already write-privileged) then the viewer token; set it explicitly
+# with MC_APPROVAL_SIGNING_KEY to decouple from the bearer tokens.
+APPROVAL_SIGNING_KEY = (
+    get("MC_APPROVAL_SIGNING_KEY", "") or INGEST_TOKEN or VIEWER_TOKEN
+)
+
 # --- Discord notifier -------------------------------------------------------
 # Prefer an explicit webhook (channel baked in); otherwise bot token + channel.
 DISCORD_WEBHOOK_URL = get("MC_DISCORD_WEBHOOK_URL", "")

@@ -81,6 +81,9 @@ in-memory state (the snapshot cache) is single-worker by design.
 | `GET /v1/approvals` | token | `{"approvals": [...]}` (pending) |
 | `POST /v1/approvals/{id}` | token | decision `{"decision": "approved"\|"denied"}`; 409 if already decided |
 | `GET /v1/approvals/{id}/wait?timeout=25` | ingest token (`Bearer`) | `{"status": "pending"\|"approved"\|"denied"}` long-poll |
+| `POST /v1/agents/{id}/command` | token | `501` with the exact reason — agent control has no write path into Hermes in this build |
+| `GET /v1/approvals/{id}/decide?decision=…&sig=…` | signed HMAC (no token) | one-click Approve/Deny; HTML confirmation page |
+| `POST /v1/admin/prune` | token | retention prune; `{days, tables:{snapshots/events/approvals:{before,deleted,after}}}` |
 
 The viewer token is read from `MC_VIEWER_TOKEN`; when set, the read/decision
 `/v1/*` routes require it via `?token=` or `Authorization: Bearer`. The ingest
@@ -135,6 +138,36 @@ A "stuck" agent must have been active recently (engagement window, default 30
 min): stale open sessions — bots whose work finished days ago but were never
 finalized — read as `offline`, not `stuck`. Thresholds are env-configurable.
 
+## Discord Approve/Deny
+
+`discord.py::notify_approval` posts the approval to `#planning` with two
+**signed one-click links** — `✅ Approve` / `⛔ Deny` — that land on
+`GET /v1/approvals/{id}/decide`. The signature is an HMAC over
+`request_id + decision` (key `MC_APPROVAL_SIGNING_KEY`, else the ingest token,
+else the viewer token), so a third party who sees the message can't forge a
+decision for a different approval or a different outcome.
+
+Interactive **buttons** are not possible in this build: the notifier posts via a
+webhook (which cannot receive interactions), and Hermes already owns the single
+gateway connection for `DISCORD_BOT_TOKEN` (Discord allows one gateway session
+per token). The signed link is the honest fallback — the links only work while
+the approval is still pending and need `MC_DASHBOARD_URL` to point at the
+publicly-reachable MC server (not `localhost`) for them to work "from anywhere".
+
+## Retention (14 days)
+
+`server/retention.py` deletes snapshots/events/approvals older than
+`MC_RETENTION_DAYS` (default **14**) and reports `before`/`deleted`/`after`
+per table. Idempotent and safe to call repeatedly:
+
+```bash
+cd server && ../.venv/bin/python retention.py            # prune now
+cd server && ../.venv/bin/python retention.py --dry-run  # preview only
+
+# or from cron, against the live server (viewer auth):
+curl -X POST "http://<host>:8000/v1/admin/prune?token=$VIEWER" -H 'Content-Type: application/json' -d '{"days":14}'
+```
+
 ## Config (env)
 
 | Var | Default |
@@ -150,6 +183,8 @@ finalized — read as `offline`, not `stuck`. Thresholds are env-configurable.
 | `MC_DISCORD_BOT_TOKEN` / `MC_DISCORD_CHANNEL_ID` | from `DISCORD_BOT_TOKEN` / `DISCORD_HOME_CHANNEL` |
 | `MC_DISCORD_WEBHOOK_URL` | `""` (use bot token+channel unless set) |
 | `MC_DASHBOARD_URL` | `http://localhost:8000/` (link in the approval DM) |
+| `MC_APPROVAL_SIGNING_KEY` | ingest token, else viewer token (signs one-click Approve/Deny links) |
+| `MC_RETENTION_DAYS` | `14` (prune snapshots/events/approvals older than this) |
 | `MC_DAILY_BUDGET_USD` | `10` |
 | `MC_ONLINE_AFTER_S` / `MC_STUCK_AFTER_S` / `MC_OFFLINE_AFTER_S` | `30` / `90` / `30` |
 | `MC_STUCK_ENGAGEMENT_WINDOW_S` | `1800` |
@@ -165,6 +200,10 @@ MC_VIEWER_TOKEN="change-me" .venv/bin/python tests/smoke.py --url http://127.0.0
 
 # path A (events + approvals + Discord) — needs a running server and both tokens:
 MC_VIEWER_TOKEN=... MC_INGEST_TOKEN=... .venv/bin/python tests/path_a_test.py --url http://127.0.0.1:8010
+
+# spec-gap close (retention + signed links + agent-control 501) — unit checks
+# run standalone; add --url + tokens for the HTTP checks:
+.venv/bin/python tests/spec_gaps_test.py
 ```
 
 `tests/smoke.py` reads real data (no fixtures) and asserts: `/healthz`, 17

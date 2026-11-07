@@ -17,3 +17,4 @@ data/
 # Mission Control secrets (never commit)
 .ingest_token
 .viewer_token
+logs/

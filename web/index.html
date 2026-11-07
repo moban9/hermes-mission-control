@@ -79,7 +79,7 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .chip.on[data-f="info"]{color:#04111c;border-color:var(--cy);background:var(--cy)}
 .chip.on[data-f="warn"]{color:#1a0e00;border-color:var(--am);background:var(--am)}
 .chip.on[data-f="error"]{color:#1a0310;border-color:var(--rd);background:var(--rd)}
-#log{height:260px;overflow-y:auto;font-size:12px;line-height:1.55;padding-right:4px}
+#log{flex:1 1 auto;min-height:90px;height:auto;overflow-y:auto;font-size:12px;line-height:1.55;padding-right:4px}
 #log div{padding:3px 7px;margin:2px 0;border-bottom:1px solid var(--line);border-left:2px solid transparent;border-radius:6px;display:flex;gap:8px}
 #log time{color:var(--mu);flex:none}
 #log .a{color:var(--cy);flex:none;min-width:58px}
@@ -135,7 +135,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 
 /* --- live event stream: floating overlay above all panels --- */
 .card.logs{
-  position:fixed; top:64px; right:16px; width:min(430px,92vw); max-height:42vh;
+  position:fixed; top:64px; right:16px; width:min(430px,92vw); max-height:min(62vh,560px);
   z-index:2147483000; display:flex; flex-direction:column; padding:0;
   background:#0b0e17; border:1px solid var(--vi);
   box-shadow:0 18px 50px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.5);
@@ -147,7 +147,10 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 .card.logs h2 .logs-toggle:hover{color:var(--vi);border-color:var(--vi)}
 .card.logs h2 .logs-toggle svg{display:block;transition:transform .18s ease}
 .card.logs.collapsed h2 .logs-toggle svg{transform:rotate(180deg)}
+.card.logs .logs-body{display:flex;flex-direction:column;min-height:0;padding:10px 12px 12px}
 .card.logs.collapsed .logs-body{display:none}
+#logEmpty{display:none;color:var(--mu);font-size:12px;padding:10px 4px}
+#logEmpty.on{display:block}
 .card.logs.collapsed h2{margin:0}
 .card.logs.collapsed{max-height:none}
 #log{max-height:calc(42vh - 46px);height:auto;overflow-y:auto}
@@ -259,7 +262,7 @@ var CM=32000,BUD=10,HL=14;
 function pad(n){return String(n).padStart(2,"0")}
 function now(){var d=new Date();return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())}
 function fmtT(ts){if(ts==null||!isFinite(ts))return now();var d=new Date(ts*1000);return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds())}
-function logAt(a,l,m,ts){var el=document.createElement("div");el.className="lv-"+l;el.dataset.l=l;el.innerHTML='<time>'+(ts||now())+'</time><span class="a">'+a+'</span><span></span>';el.lastChild.textContent=m;if(S.filter!=="all"&&S.filter!==l)el.hidden=true;var L=$("log");L.appendChild(el);while(L.children.length>80)L.removeChild(L.firstChild);L.scrollTop=L.scrollHeight}
+function logAt(a,l,m,ts){var el=document.createElement("div");el.className="lv-"+l;el.dataset.l=l;el.innerHTML='<time>'+(ts||now())+'</time><span class="a">'+a+'</span><span></span>';el.lastChild.textContent=m;if(S.filter!=="all"&&S.filter!==l)el.hidden=true;var L=$("log");L.appendChild(el);while(L.children.length>80)L.removeChild(L.firstChild);L.scrollTop=L.scrollHeight;if(typeof chipCounts==="function")chipCounts()}
 function log(a,l,m){logAt(a,l,m,now())}
 function setH(id,h){var e=$(id);if(e.dataset.h!==h){e.dataset.h=h;e.innerHTML=h}}
 function raise(k,sev,msg,ag){if(AL[k]||(DM[k]&&Date.now()-DM[k]<45000))return;AL[k]={sev:sev,msg:msg,ag:ag,t:now()};log(ag,sev=="crit"?"error":"warn",msg);drawAlerts()}
@@ -425,8 +428,15 @@ function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textCont
  * ------------------------------------------------------------------------- */
 /* Pause/Resume + Pause-all controls removed — the server exposes no pause mechanism,
    so these were dead affordances that only faked local state (Randy: no cosmetic controls). */
-$("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+'</button>'}).join("");
-$("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});[].forEach.call($("log").children,function(r){if(!r.dataset.fhint)r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter});var vis=[].filter.call($("log").children,function(r){return !r.hidden&&!r.dataset.fhint}).length;var h=$("log").querySelector("[data-fhint]");if(!vis&&!h){var d=document.createElement("div");d.dataset.fhint="1";d.className="empty";d.textContent="No "+S.filter+" events in the current window.";$("log").appendChild(d);}else if(vis&&h){h.remove();}});
+$("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+' <i class="n" style="font-style:normal;opacity:.65"></i></button>'}).join("");
+$("chips").insertAdjacentHTML("afterend",'<div id="logEmpty">No events at this level yet.</div>');
+function chipCounts(){
+  var rows=[].slice.call($("log").children),n={all:rows.length,info:0,warn:0,error:0},vis=0;
+  rows.forEach(function(r){n[r.dataset.l]=(n[r.dataset.l]||0)+1;if(!r.hidden)vis++;});
+  [].forEach.call($("chips").children,function(b){var k=b.dataset.f,q=b.querySelector(".n");if(q)q.textContent=n[k]||0;});
+  var e=$("logEmpty");if(e)e.classList.toggle("on",rows.length>0&&vis===0);
+}
+$("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});if(typeof chipCounts==="function")chipCounts();[].forEach.call($("log").children,function(r){if(!r.dataset.fhint)r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter});var vis=[].filter.call($("log").children,function(r){return !r.hidden&&!r.dataset.fhint}).length;var h=$("log").querySelector("[data-fhint]");if(!vis&&!h){var d=document.createElement("div");d.dataset.fhint="1";d.className="empty";d.textContent="No "+S.filter+" events in the current window.";$("log").appendChild(d);}else if(vis&&h){h.remove();}});
 $("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;if(LIVE){decideApproval(id,ok);return;}var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a&&a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a&&a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});
 $("alerts").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;DM[b.dataset.k]=Date.now();delete AL[b.dataset.k];drawAlerts()});
 $("mtabs").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;if(b.dataset.c){if(LIVE){sendCommand(A[sel].n,"compact")}else{var a=A[sel];a.cx.hist=Math.round(a.cx.hist*.25);a.cx.tools=Math.round(a.cx.tools*.4);log(a.n,"info","Context compacted (demo mode)");unraise("ctx"+sel);drawMem();}return}sel=+b.dataset.i;drawTabs();drawMem()});

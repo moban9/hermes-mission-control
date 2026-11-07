@@ -128,7 +128,7 @@ def _pre_tool(tool_name=None, args=None, session_id=None, task_id=None, **_kw):
         if risky:
             try:
                 ok = emitter.request_approval(
-                    _agent() or "agent",
+                    _agent() or None,
                     f"{tool_name}: {reason or str(args)[:180]}",
                     "high",
                     session_id=session_id,

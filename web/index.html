@@ -135,15 +135,13 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 
 /* --- live event stream: floating overlay above all panels --- */
 .card.logs{
-  position:fixed; top:72px; right:16px; width:min(430px,92vw); max-height:42vh;
-  z-index:999; margin:0; padding:12px 14px;
-  background:linear-gradient(180deg,rgba(26,20,52,.96),rgba(16,12,34,.94)); border:1px solid var(--vi);
-  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(165,139,255,.18),0 0 26px rgba(77,225,255,.16),0 0 56px rgba(165,139,255,.20);
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
-  border-radius:14px; overflow:hidden;
-}
+  position:fixed; top:64px; right:16px; width:min(430px,92vw); max-height:42vh;
+  z-index:2147483000; display:flex; flex-direction:column; padding:0;
+  background:#0b0e17; border:1px solid var(--vi);
+  box-shadow:0 18px 50px rgba(0,0,0,.65), 0 0 0 1px rgba(0,0,0,.5);
+  backdrop-filter:none; -webkit-backdrop-filter:none;}
 .card.logs h2{color:var(--vi);margin:0 0 8px}
-.card.logs .logs-title{background:linear-gradient(90deg,var(--cy),var(--vi));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.card.logs .logs-title{color:var(--vi);-webkit-text-fill-color:currentColor;font-weight:700}
 .card.logs h2 small{color:var(--mu)}
 .card.logs h2 .logs-toggle{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;padding:0;background:transparent;border:1px solid var(--line);border-radius:7px;color:var(--mu);cursor:pointer}
 .card.logs h2 .logs-toggle:hover{color:var(--vi);border-color:var(--vi)}
@@ -189,8 +187,10 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   </section>
 
   <section class="card logs" id="logsCard">
-    <h2><span class="logs-title">Live event stream</span>
-      <button class="logs-toggle" id="logsToggle" type="button" aria-label="Toggle live event stream" aria-expanded="true" aria-controls="logsBody">
+    <h2 id="logsHead" title="Click to collapse or expand" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)">
+      <span class="logs-title">Live event stream</span>
+      <button class="logs-toggle" id="logsToggle" type="button" aria-label="Toggle live event stream" aria-expanded="true" aria-controls="logsBody" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;font:600 11px/1 system-ui;color:var(--vi);background:#171a26;border:1px solid var(--vi);border-radius:8px;cursor:pointer">
+        <span id="logsToggleLabel">Hide</span>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </h2>
@@ -292,6 +292,9 @@ function drawTopo(){
   $("topo").innerHTML=s;
   resolveTopoCollisions();
 }
+/* test/QA hooks (dev only): expose the topology renderer and agent array so a
+   deterministic 17-busy-agent scenario can be driven from the console. */
+window.__mc={drawTopo:drawTopo,resolveTopoCollisions:resolveTopoCollisions,getA:function(){return A},setA:function(a){A=a}};
 /* After the topology SVG is built, re-offset (or suppress) any action label whose
    text box would overlap another text box — node names, the centre "Onendo" node,
    or an already-placed action label. Measured, not eyeballed: after this pass there
@@ -348,6 +351,9 @@ function drawKpi(){
   var rate=Math.round(S.done/(S.done+S.failed)*100);
   var k=[["Active subagents",act+"/"+A.length,"All healthy","up"],["Tasks completed",S.done,"+3 in the last hour","up"],["Success rate",rate+"%",S.failed+" failed","dn"],["Tokens per second",Math.round(S.tps[S.tps.length-1]),"steady","up"],["Spend today (WIB)","$"+S.cost.toFixed(2),"of $"+BUD+" budget","up"]];
   $("kpis").innerHTML=k.map(function(x){return '<div class="kpi"><span>'+x[0]+'</span><b>'+x[1]+'</b><i class="'+x[3]+'">'+x[2]+'</i></div>'}).join("");
+  /* Re-clamp the floating overlay below the (now-populated) KPI row when the user
+     has no saved/dragged position — the row is empty at first paint in live mode. */
+  if(window.__mcOverlay)window.__mcOverlay.reclamp();
 }
 function actGroup(a){
   var s=String(a.act||a.s||"").toLowerCase();
@@ -432,11 +438,15 @@ $("live").addEventListener("click",function(){rp=null;$("rng").value=H.length-1;
 
 /* --- overlay collapse/expand (remembered per tab via sessionStorage) --- */
 (function(){
-  var KEY="mc_logs_collapsed",card=$("logsCard"),btn=$("logsToggle");
-  function apply(c){card.classList.toggle("collapsed",c);btn.setAttribute("aria-expanded",c?"false":"true");}
+  var KEY="mc_logs_collapsed",card=$("logsCard"),btn=$("logsToggle"),head=$("logsHead");
+  function apply(c){card.classList.toggle("collapsed",c);btn.setAttribute("aria-expanded",c?"false":"true");
+    var lb=$("logsToggleLabel");if(lb)lb.textContent=c?"Show":"Hide";}
   var saved=null;try{saved=sessionStorage.getItem(KEY);}catch(e){}
   apply(saved==="1");
-  btn.addEventListener("click",function(){var c=!card.classList.contains("collapsed");apply(c);try{sessionStorage.setItem(KEY,c?"1":"0");}catch(e){}});
+  function toggleLogs(){var c=!card.classList.contains("collapsed");apply(c);
+    try{sessionStorage.setItem(KEY,c?"1":"0");}catch(e){}}
+  btn.addEventListener("click",function(ev){ev.stopPropagation();toggleLogs();});
+  if(head)head.addEventListener("click",toggleLogs);
 })();
 
 /* ------------------------------------------------------------------------- *
@@ -721,6 +731,9 @@ if(/[?&]demo=1/.test(location.search)){demoMode();}else{bootLive();}
     card.style.setProperty('bottom','auto','important');
     /* leave left/right to the stylesheet: right-anchored on desktop, full-width on mobile */
   }
+  /* Expose for the data layer: the KPI row only gains height once /v1/state renders,
+     so the no-saved-position default must be re-clamped after every KPI draw. */
+  window.__mcOverlay={placeDefault:placeDefault,reclamp:function(){if(!hasSaved&&!drag)placeDefault();},hasSaved:function(){return hasSaved}};
   if(hasSaved)place(saved.x,saved.y);
   else placeDefault();
   var drag=null;

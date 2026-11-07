@@ -15,7 +15,23 @@ import urllib.request
 import uuid
 
 URL = os.getenv("MC_URL", "http://127.0.0.1:8010").rstrip("/")
-TOKEN = os.environ.get("MC_INGEST_TOKEN", "")
+def _token() -> str:
+    """Ingest token from the environment, else from the shared token file."""
+    t = os.environ.get("MC_INGEST_TOKEN", "").strip()
+    if t:
+        return t
+    for path in ("/opt/data/cache/mc_ingest_token.txt", os.path.expanduser("~/.mc_ingest_token")):
+        try:
+            with open(path) as fh:
+                v = fh.read().strip()
+                if v:
+                    return v
+        except Exception:
+            continue
+    return ""
+
+
+TOKEN = _token()
 RUN_ID = os.getenv("MC_RUN_ID", time.strftime("run_%Y-%m-%d_") + uuid.uuid4().hex[:4])
 _AGENT = os.getenv("MC_AGENT_ID", "")
 _q: "queue.Queue[dict]" = queue.Queue(maxsize=5000)
@@ -81,9 +97,28 @@ threading.Thread(target=_worker, daemon=True).start()
 atexit.register(lambda: time.sleep(0.6))
 
 
+LAST_ERROR = ""
+
+
+def _reachable(timeout: float = 3.0) -> bool:
+    try:
+        with urllib.request.urlopen(f"{URL}/healthz", timeout=timeout) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
 def request_approval(agent_id: str, action: str, risk: str, timeout_s: int = 900) -> bool:
     """Blocks only this agent's tool call, not Hermes. Deny on timeout."""
+    global LAST_ERROR
     aid = uuid.uuid4().hex
+    if not TOKEN:
+        LAST_ERROR = "no_ingest_token"
+        return False
+    if not _reachable():
+        LAST_ERROR = "mc_unreachable"
+        return False
+    LAST_ERROR = ""
     emit("approval.requested", agent_id, approval_id=aid, action=action, risk=risk)
     end = time.time() + timeout_s
     while time.time() < end:

@@ -381,6 +381,31 @@ def _handle_approval_requested(ev: dict) -> None:
         broadcast_sse("approval", _approval_sse(ap))
 
 
+
+_AGENT_CACHE: dict[str, str] = {}
+
+
+def _resolve_agent(session_id: str | None) -> str | None:
+    """Map a Hermes session id to the profile that owns it (read-only)."""
+    if not session_id:
+        return None
+    if session_id in _AGENT_CACHE:
+        return _AGENT_CACHE[session_id]
+    try:
+        import sqlite3
+        con = sqlite3.connect(f"file:{db.HERMES_STATE_DB}?mode=ro", uri=True)
+        try:
+            row = con.execute("SELECT profile_name FROM sessions WHERE id=?",
+                              (session_id,)).fetchone()
+        finally:
+            con.close()
+        if row and row[0]:
+            _AGENT_CACHE[session_id] = row[0]
+            return row[0]
+    except Exception:
+        pass
+    return None
+
 @app.post("/v1/events")
 def v1_events(payload: Any = Body(...),
               authorization: str | None = Header(default=None)) -> dict:
@@ -397,6 +422,8 @@ def v1_events(payload: Any = Body(...),
             for ev in events:
                 if not isinstance(ev, dict) or not ev.get("id"):
                     continue
+                if not ev.get("agent_id"):
+                    ev["agent_id"] = _resolve_agent(ev.get("session_id"))
                 if db.insert_event(con, ev) > 0:
                     accepted += 1
                     accepted_events.append(ev)

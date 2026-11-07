@@ -391,7 +391,29 @@ function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Noth
 function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
 function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div>'}
 function drawReplay(){var n=H.length,cur=rp===null?n-1:rp,s="";H.forEach(function(h,j){h.st.forEach(function(st,i){s+='<rect x="'+j*3+'" y="'+i*12+'" width="2.6" height="11" rx="1" fill="'+cols[st]+'"/>'})});s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="60" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';$("heat").innerHTML=s;var h=H[cur];if(!h){$("rpt").textContent="Live";$("rpa").innerHTML="";$("rpi").textContent="";return;}$("rpt").textContent=rp===null?"Live":"Viewing "+h.t;$("rpa").innerHTML=A.map(function(a,i){return '<span class="chip on" style="color:'+cols[h.st[i]]+'">'+a.n+': '+h.st[i]+', '+h.tk[i]+'</span>'}).join("");$("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals"}
-function drawFc(){var n=H.length;if(n<2){$("fcs").textContent="Collecting cost history";$("fct").innerHTML='<div class="empty">Not enough history yet \u2014 snapshots are recorded every 30s.</div>';return;}var L=H[n-1],k=Math.min(10,n-1),burn=(L.cost-H[n-1-k].cost)/k*120,proj=S.cost+burn*HL,mx=Math.max(BUD,proj)*1.1,T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");$("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(L.cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';var over=proj>BUD*.9;$("fcs").textContent=over?"Over budget risk":"On track";$("fct").innerHTML='<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div><div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div><div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>';if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Onendo")}
+function drawFc(){
+  var fc=S.fc||{},n=H.length,hasFc=(fc.projected_usd!=null);
+  var burn=hasFc?fc.burn_per_hour:0, proj=hasFc?fc.projected_usd:0;
+  if(!hasFc){
+    if(n<2){$("fcs").textContent="Collecting cost history";$("fct").innerHTML='<div class="empty">No forecast yet \u2014 server forecast appears once spend is recorded today.</div>';return;}
+    var L=H[n-1],k2=Math.min(10,n-1);
+    burn=(L.cost-H[n-1-k2].cost)/k2*120; proj=S.cost+burn*HL;
+  }
+  var mx=Math.max(BUD,proj)*1.1;
+  if(n>=2){
+    var T=n+30;function X(i){return i/T*300}function Y(v){return 105-v/mx*100}
+    var pts=H.map(function(h,i){return X(i).toFixed(1)+","+Y(h.cost).toFixed(1)}).join(" ");
+    $("fc").innerHTML='<line x1="0" x2="300" y1="'+Y(BUD)+'" y2="'+Y(BUD)+'" stroke="var(--rd)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/><polyline points="'+pts+'" fill="none" stroke="var(--cy)" stroke-width="1.8" vector-effect="non-scaling-stroke"/><line x1="'+X(n-1)+'" y1="'+Y(H[n-1].cost)+'" x2="'+X(T)+'" y2="'+Y(proj)+'" stroke="var(--vi)" stroke-width="1.8" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';
+  } else { $("fc").innerHTML=""; }
+  var over=proj>BUD*0.9;
+  $("fcs").textContent=over?"Over budget risk":"On track";
+  $("fct").innerHTML='<div class="pm"><span>Spend today</span><b>$'+S.cost.toFixed(2)+'</b></div>'
+    +'<div class="pm"><span>Burn rate</span><b>$'+burn.toFixed(2)+' per hour</b></div>'
+    +'<div class="pm"><span>Projected by end of day</span><b>$'+proj.toFixed(2)+'</b></div>'
+    +'<div class="pm"><span>Daily budget</span><b>$'+BUD.toFixed(2)+'</b></div>'
+    +(fc.hours_left!=null?'<div class="pm"><span>Hours left today</span><b>'+fc.hours_left.toFixed(1)+'h ('+(fc.tz||"local")+')</b></div>':'');
+  if(over)raise("budget","crit","Projected spend of $"+proj.toFixed(2)+" is close to the $"+BUD+" daily budget","Onendo");
+}
 
 function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textContent="session "+pad(Math.floor(t/3600))+":"+pad(Math.floor(t%3600/60))+":"+pad(t%60)}
 
@@ -547,7 +569,7 @@ function mapState(state){
   S.cost=(state.cost_forecast&&state.cost_forecast.daily&&state.cost_forecast.daily.length)?(state.cost_forecast.daily[0].cost_usd||0):(k.total_cost_usd||0); /* spend TODAY (most recent day bucket), not lifetime total */
   S.budget=(state.cost_forecast&&state.cost_forecast.budget_usd)||BUD;BUD=S.budget;
   S.calls=state.tool_counts||{};
-  S.tasks=state.tasks||[];
+  S.tasks=state.tasks||[];S.fc=state.cost_forecast||null;
   var topFacts=(state.memory&&state.memory.facts)||[];
   var memByName={};(state.agents||[]).forEach(function(ra){memByName[ra.name]=(ra.memory&&ra.memory.facts)||[];});
   MEM={};A.forEach(function(a){var facts=memByName[a.n]||[];if(!facts.length&&a.n==="ceo")facts=topFacts;MEM[a.n]=facts.map(function(f){return [f.text,f.age!=null?ageAgo(f.age):(f.age_s!=null?ageAgo(f.age_s):"")]});});

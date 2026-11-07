@@ -533,6 +533,26 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
     today = _local_day(now)
     today_cost = sum(d["cost_usd"] for d in daily if d["date"] == today)
 
+    # --- end-of-day forecast (server-side, authoritative) -------------------
+    # Burn rate is today's spend over the part of the LOCAL day that has
+    # elapsed; the projection extends it to local midnight.  Guarded so a
+    # few minutes after midnight cannot extrapolate to a huge number.
+    from datetime import datetime, timedelta
+    _now_dt = datetime.fromtimestamp(now, _tz())
+    _midnight = _now_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    elapsed_h = max((_now_dt - _midnight).total_seconds() / 3600.0, 0.0)
+    hours_left = max(24.0 - elapsed_h, 0.0)
+    burn = (today_cost / elapsed_h) if elapsed_h >= 0.25 else 0.0
+    projected = today_cost + burn * hours_left
+    forecast = {
+        "elapsed_hours": round(elapsed_h, 2),
+        "hours_left": round(hours_left, 2),
+        "burn_per_hour": round(burn, 4),
+        "projected_usd": round(projected, 4),
+        "over_budget": projected > budget_usd,
+        "tz": os.environ.get("MC_TZ", "Asia/Jakarta"),
+    }
+
     total_cost = sum(a["cost_usd"] for a in agents)
     total_input = sum(a["tokens"]["input"] for a in agents)
     total_output = sum(a["tokens"]["output"] for a in agents)
@@ -582,6 +602,7 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
             "daily": daily,
             "today_usd": round(today_cost, 6),
             "budget_usd": budget_usd,
+            **forecast,
         },
         "alerts": alert_list,
     }

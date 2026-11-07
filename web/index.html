@@ -366,7 +366,7 @@ var ROLE={ceo:"Executive",atlas:"Head of Data",cask:"Data Engineer",keel:"Infras
 var STATUS={online:"running",stuck:"waiting",offline:"offline",paused:"paused",error:"error"};
 var PROG={online:0.7,stuck:0.4,offline:0,paused:0,error:0};
 var TOKEN_KEY="mc_viewer_token";
-var token=null,es=null,lastEventAt=null,lastToks=null,lastToksTs=null,connState="connecting",snapTimer=null;
+var token=null,es=null,lastEventAt=null,lastToks=null,lastToksTs=null,connState="connecting",snapTimer=null,stateTimer=null;
 
 function shortId(id){if(id==null||id==="")return "\u2014";var s=String(id);return s.length<=8?s:s.slice(-8)}
 function estimateCx(tk){
@@ -481,7 +481,7 @@ function tokenQuery(){return token?("?token="+encodeURIComponent(token)):""}
 function showGate(msg){$("gateerr").textContent=msg||"";$("gate").classList.remove("hidden");$("tok").focus();}
 function hideGate(){$("gate").classList.add("hidden");}
 function rejectAuth(msg){stop();token=null;try{sessionStorage.removeItem(TOKEN_KEY);}catch(e){} $("tok").value="";showGate(msg||"Invalid or missing viewer token.");}
-function stop(){if(es){es.close();es=null;}if(snapTimer){clearInterval(snapTimer);snapTimer=null;}}
+function stop(){if(es){es.close();es=null;}if(snapTimer){clearInterval(snapTimer);snapTimer=null;}if(stateTimer){clearInterval(stateTimer);stateTimer=null;}}
 function ensureSSE(){
   if(es)return;
   setConn("connecting");
@@ -522,6 +522,7 @@ async function connect(){
     setConn("live");
     ensureSSE();
     if(!snapTimer)snapTimer=setInterval(pushSnapshot,30000);
+    if(!stateTimer)stateTimer=setInterval(refreshState,15000);
   }catch(e){setConn("reconnecting");}
 }
 function bootLive(){

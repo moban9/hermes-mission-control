@@ -292,9 +292,6 @@ function drawTopo(){
   $("topo").innerHTML=s;
   resolveTopoCollisions();
 }
-/* test/QA hooks (dev only): expose the topology renderer and agent array so a
-   deterministic 17-busy-agent scenario can be driven from the console. */
-window.__mc={drawTopo:drawTopo,resolveTopoCollisions:resolveTopoCollisions,getA:function(){return A},setA:function(a){A=a}};
 /* After the topology SVG is built, re-offset (or suppress) any action label whose
    text box would overlap another text box — node names, the centre "Onendo" node,
    or an already-placed action label. Measured, not eyeballed: after this pass there

@@ -445,6 +445,76 @@ def v1_events(payload: Any = Body(...),
     return {"accepted": accepted, "duplicates": duplicates}
 
 
+@app.get("/v1/agents/stuck")
+def v1_agents_stuck(_auth: None = Depends(_auth)) -> dict:
+    """Diagnose agents whose open session or kanban card disagrees with reality."""
+    import sqlite3
+    now = time.time()
+    tasks: dict[str, list] = {}
+    try:
+        kc = sqlite3.connect(f"file:{db.KANBAN_DB}?mode=ro", uri=True, timeout=5.0)
+        try:
+            for r in kc.execute("SELECT assignee,status,title,block_kind,last_failure_error "
+                                "FROM tasks WHERE status IN ('running','blocked','ready')"):
+                tasks.setdefault(r[0] or "", []).append(
+                    {"status": r[1], "title": r[2] or "", "block_kind": r[3],
+                     "error": r[4] or ""})
+        finally:
+            kc.close()
+    except Exception:
+        pass
+
+    out = []
+    for name, path in db.profiles():
+        who = "ceo" if name == "ceo" else name
+        sess = None
+        try:
+            sc = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
+            try:
+                sess = sc.execute("SELECT id, last_activity_at, last_activity_description "
+                                  "FROM sessions WHERE ended_at IS NULL "
+                                  "ORDER BY last_activity_at DESC LIMIT 1").fetchone()
+            finally:
+                sc.close()
+        except Exception:
+            pass
+
+        age_min = round((now - (sess[1] or 0)) / 60.0, 1) if sess else None
+        cards = tasks.get(who, [])
+        running = [c for c in cards if c["status"] == "running"]
+        blocked = [c for c in cards if c["status"] == "blocked"]
+
+        if blocked:
+            verdict = "blocked"
+            c = blocked[0]
+            reason = f"{len(blocked)} blocked card(s): {c['title'][:70]}"
+            if c["block_kind"]:
+                reason += f" [{c['block_kind']}]"
+            if c["error"]:
+                reason += f" — {c['error'][:90]}"
+        elif running and (age_min is None or age_min > 10):
+            verdict = "stuck"
+            reason = f"card running but no activity for {age_min or 0:.0f} min: {running[0]['title'][:60]}"
+        elif running:
+            verdict = "working"
+            reason = f"running: {running[0]['title'][:60]}"
+        elif sess and age_min is not None and age_min > 10:
+            verdict = "stale-session"
+            reason = f"session left open, no activity for {age_min:.0f} min, no open card"
+        else:
+            verdict = "idle"
+            reason = "no open session"
+
+        out.append({"agent": who, "verdict": verdict, "reason": reason,
+                    "open_session": bool(sess), "idle_min": age_min,
+                    "cards": len(cards)})
+
+    order = {"stuck": 0, "blocked": 1, "stale-session": 2, "working": 3, "idle": 4}
+    out.sort(key=lambda a: order.get(a["verdict"], 9))
+    return {"checked_at": now, "agents": out,
+            "needs_attention": [a for a in out if a["verdict"] in ("stuck", "blocked", "stale-session")]}
+
+
 @app.get("/v1/approvals")
 def v1_approvals(_auth: None = Depends(_auth)) -> dict:
     """Pending approvals (viewer auth)."""

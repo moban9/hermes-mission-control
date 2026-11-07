@@ -80,6 +80,7 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .chip.on[data-f="warn"]{color:#1a0e00;border-color:var(--am);background:var(--am)}
 .chip.on[data-f="error"]{color:#1a0310;border-color:var(--rd);background:var(--rd)}
 #log{flex:1 1 auto;min-height:90px;height:auto;overflow-y:auto;font-size:12px;line-height:1.55;padding-right:4px}
+#log div[hidden]{display:none!important}
 #log div{padding:3px 7px;margin:2px 0;border-bottom:1px solid var(--line);border-left:2px solid transparent;border-radius:6px;display:flex;gap:8px}
 #log time{color:var(--mu);flex:none}
 #log .a{color:var(--cy);flex:none;min-width:58px}
@@ -185,15 +186,16 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   </section>
 
   <section class="card agents">
-    <h2>Subagents <small>Live status and activity</small></h2>
+    <h2>Subagents <small>Live status and activity</small>
+      <button id="checkStuck" type="button" style="margin-left:auto;padding:5px 10px;font:600 11px/1 system-ui;color:var(--cy);background:none;border:1px solid color-mix(in srgb,var(--cy) 45%,transparent);border-radius:8px;cursor:pointer">Check stuck</button></h2>
     <div class="grid" id="agents"></div>
   </section>
 
   <section class="card logs" id="logsCard">
     <h2 id="logsHead" title="Click to collapse or expand" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)">
       <span class="logs-title">Live event stream</span>
-      <button class="logs-toggle" id="logsToggle" type="button" aria-label="Toggle live event stream" aria-expanded="true" aria-controls="logsBody" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;font:600 11px/1 system-ui;color:var(--vi);background:#171a26;border:1px solid var(--vi);border-radius:8px;cursor:pointer">
-        <span id="logsToggleLabel">Hide</span>
+      <button class="logs-toggle" id="logsToggle" type="button" aria-label="Toggle live event stream" aria-expanded="true" aria-controls="logsBody" style="display:inline-flex;align-items:center;gap:4px;padding:2px 4px;font:500 11px/1 system-ui;color:var(--mu);background:none;border:0;cursor:pointer;opacity:.85">
+        <span id="logsToggleLabel">hide</span>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </h2>
@@ -430,6 +432,17 @@ function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textCont
    so these were dead affordances that only faked local state (Randy: no cosmetic controls). */
 $("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+' <i class="n" style="font-style:normal;opacity:.65"></i></button>'}).join("");
 $("chips").insertAdjacentHTML("afterend",'<div id="logEmpty">No events at this level yet.</div>');
+(function(){var b=$("checkStuck");if(!b)return;
+  b.addEventListener("click",function(){
+    b.disabled=true;var old=b.textContent;b.textContent="Checking\u2026";
+    fetch("/v1/agents/stuck"+tokenQuery()).then(function(r){return r.json();}).then(function(d){
+      var att=d.needs_attention||[];
+      log("system",att.length?"warn":"info","Stuck check: "+d.agents.length+" agents, "+att.length+" need attention");
+      att.slice(0,8).forEach(function(a){log(a.agent,a.verdict==="blocked"?"warn":"error",a.verdict+" \u2014 "+a.reason);});
+      if(!att.length)log("system","info","All agents consistent: no stuck sessions, no blocked cards.");
+    }).catch(function(e){log("system","error","Stuck check failed: "+e);})
+    .then(function(){b.disabled=false;b.textContent=old;});
+  });})();
 function chipCounts(){
   var rows=[].slice.call($("log").children),n={all:rows.length,info:0,warn:0,error:0},vis=0;
   rows.forEach(function(r){n[r.dataset.l]=(n[r.dataset.l]||0)+1;if(!r.hidden)vis++;});
@@ -447,7 +460,7 @@ $("live").addEventListener("click",function(){rp=null;$("rng").value=H.length-1;
 (function(){
   var KEY="mc_logs_collapsed",card=$("logsCard"),btn=$("logsToggle"),head=$("logsHead");
   function apply(c){card.classList.toggle("collapsed",c);btn.setAttribute("aria-expanded",c?"false":"true");
-    var lb=$("logsToggleLabel");if(lb)lb.textContent=c?"Show":"Hide";}
+    var lb=$("logsToggleLabel");if(lb)lb.textContent=c?"show":"hide";}
   var saved=null;try{saved=sessionStorage.getItem(KEY);}catch(e){}
   apply(saved==="1");
   function toggleLogs(){var c=!card.classList.contains("collapsed");apply(c);

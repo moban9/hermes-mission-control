@@ -108,7 +108,8 @@ def _reachable(timeout: float = 3.0) -> bool:
         return False
 
 
-def request_approval(agent_id: str, action: str, risk: str, timeout_s: int = 900) -> bool:
+def request_approval(agent_id: str, action: str, risk: str, timeout_s: int = 900,
+                     session_id: str | None = None) -> bool:
     """Blocks only this agent's tool call, not Hermes. Deny on timeout."""
     global LAST_ERROR
     aid = uuid.uuid4().hex
@@ -119,7 +120,8 @@ def request_approval(agent_id: str, action: str, risk: str, timeout_s: int = 900
         LAST_ERROR = "mc_unreachable"
         return False
     LAST_ERROR = ""
-    emit("approval.requested", agent_id, approval_id=aid, action=action, risk=risk)
+    emit("approval.requested", agent_id, approval_id=aid, action=action, risk=risk,
+         session_id=session_id)
     end = time.time() + timeout_s
     while time.time() < end:
         try:

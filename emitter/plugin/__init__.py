@@ -131,6 +131,7 @@ def _pre_tool(tool_name=None, args=None, session_id=None, task_id=None, **_kw):
                     _agent() or "agent",
                     f"{tool_name}: {reason or str(args)[:180]}",
                     "high",
+                    session_id=session_id,
                 )
             except Exception:
                 ok = False

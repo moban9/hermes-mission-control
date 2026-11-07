@@ -22,10 +22,11 @@ import json
 import os
 import threading
 import time
+import urllib.parse
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -391,19 +392,21 @@ def _resolve_agent(session_id: str | None) -> str | None:
         return None
     if session_id in _AGENT_CACHE:
         return _AGENT_CACHE[session_id]
-    try:
-        import sqlite3
-        con = sqlite3.connect(f"file:{db.HERMES_STATE_DB}?mode=ro", uri=True)
+    import sqlite3
+    for name, path in db.profiles():
         try:
-            row = con.execute("SELECT profile_name FROM sessions WHERE id=?",
-                              (session_id,)).fetchone()
-        finally:
-            con.close()
-        if row and row[0]:
-            _AGENT_CACHE[session_id] = row[0]
-            return row[0]
-    except Exception:
-        pass
+            con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=3.0)
+            try:
+                row = con.execute("SELECT profile_name FROM sessions WHERE id=?",
+                                  (session_id,)).fetchone()
+            finally:
+                con.close()
+        except Exception:
+            continue
+        if row:
+            who = row[0] or name
+            _AGENT_CACHE[session_id] = who
+            return who
     return None
 
 @app.post("/v1/events")
@@ -423,7 +426,8 @@ def v1_events(payload: Any = Body(...),
                 if not isinstance(ev, dict) or not ev.get("id"):
                     continue
                 if not ev.get("agent_id"):
-                    ev["agent_id"] = _resolve_agent(ev.get("session_id"))
+                    _d = ev.get("data") if isinstance(ev.get("data"), dict) else {}
+                    ev["agent_id"] = _resolve_agent(ev.get("session_id") or _d.get("session_id"))
                 if db.insert_event(con, ev) > 0:
                     accepted += 1
                     accepted_events.append(ev)
@@ -493,26 +497,63 @@ def _decision_page(message: str, ok: bool, code: int = 200) -> HTMLResponse:
 
 
 @app.get("/v1/approvals/{identifier}/decide")
-def v1_approval_decide_link(identifier: str, decision: str = Query(...),
-                            sig: str = Query(...)) -> HTMLResponse:
-    """Signed one-click decision — the HMAC *is* the auth (no viewer token).
+def v1_approval_decide_confirm(identifier: str, decision: str = Query(...),
+                               sig: str = Query(...)) -> HTMLResponse:
+    """Show the decision so the click is deliberate.
 
-    Lands from the Discord approval notification so Randy can Approve/Deny from
-    anywhere.  Signature binds ``request_id + decision``; a wrong/foreign sig is
-    rejected, and an already-decided approval reports that rather than 409-ing.
+    A GET must never change state: Discord (and mail clients, previewers)
+    fetch links automatically, and an earlier version let the unfurl bot
+    approve requests seconds after they were posted.
     """
+    raw = (decision or "").strip().lower()
+    if raw not in _APPROVE_WORDS and raw not in _DENY_WORDS:
+        return _decision_page("Decision must be 'approved' or 'denied'.",
+                              ok=False, code=400)
+    if not signing.verify(identifier, raw, sig):
+        return _decision_page("Invalid or expired approval link.", ok=False, code=403)
+
+    ap = db.get_approval(identifier) or {}
+    label = "Approve" if raw in _APPROVE_WORDS else "Deny"
+    body = f"""<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{label} this action?</title>
+<style>body{{font:15px/1.5 system-ui;background:#0b0e17;color:#e6e8ee;display:grid;
+place-items:center;height:100vh;margin:0}}form{{background:#151926;padding:28px;border-radius:16px;
+border:1px solid #6a4fd8;max-width:460px;width:calc(100% - 32px)}}
+b{{color:#9be7ff}}button{{margin-top:18px;padding:11px 20px;border-radius:10px;border:0;
+background:{'#2f9e5f' if label=='Approve' else '#c0392b'};color:#fff;font:600 15px system-ui;
+cursor:pointer}}</style>
+<form method="post" action="/v1/approvals/{identifier}/decide">
+<h2 style="margin:0 0 10px">{label} this action?</h2>
+<div>Agent: <b>{ap.get('agent','')}</b></div>
+<div style="margin-top:6px;word-break:break-word">{ap.get('action','') or '(no action recorded)'}</div>
+<input type="hidden" name="decision" value="{raw}">
+<input type="hidden" name="sig" value="{sig}">
+<button type="submit">{label}</button>
+</form>"""
+    return HTMLResponse(body)
+
+
+@app.post("/v1/approvals/{identifier}/decide")
+async def v1_approval_decide(identifier: str, request: Request) -> HTMLResponse:
+    """Apply a signed decision submitted from the confirmation form.
+
+    Parsed by hand: python-multipart is not installed on this host, and a
+    dependency just for two form fields is not worth it.
+    """
+    form = urllib.parse.parse_qs((await request.body()).decode("utf-8", "replace"))
+    decision = (form.get("decision") or [""])[0]
+    sig = (form.get("sig") or [""])[0]
     raw = (decision or "").strip().lower()
     if raw in _APPROVE_WORDS:
         status = "approved"
     elif raw in _DENY_WORDS:
         status = "rejected"
     else:
-        return _decision_page("Decision must be 'approved' or 'denied'.",
-                              ok=False, code=400)
+        return _decision_page("Decision must be 'approved' or 'denied'.", ok=False, code=400)
 
     if not signing.verify(identifier, raw, sig):
-        return _decision_page("Invalid or expired approval link.",
-                              ok=False, code=403)
+        return _decision_page("Invalid or expired approval link.", ok=False, code=403)
 
     try:
         updated = db.decide_approval(identifier, status, "discord-link", time.time())
@@ -524,42 +565,8 @@ def v1_approval_decide_link(identifier: str, decision: str = Query(...),
     live.bump()
     broadcast_sse("approval", _approval_sse(updated))
     label = "Approved" if status == "approved" else "Denied"
-    return _decision_page(
-        f"{label} — {updated.get('agent', '')} {updated.get('action', '')}",
-        ok=True,
-    )
-
-
-@app.post("/v1/agents/{agent_id}/command")
-def v1_agent_command(agent_id: str, body: dict = Body(default=None),
-                     _auth: None = Depends(_auth)) -> dict:
-    """Agent control command (viewer auth) — pause/resume/compact.
-
-    Honest by design: Mission Control has no write channel into Hermes, so a
-    command has no real effect in this build and returns **501** with the exact
-    reason rather than faking success.  The dashboard surfaces that reason.
-    """
-    action = str((body or {}).get("action") or "").strip().lower()
-    if action not in _VALID_COMMANDS:
-        raise HTTPException(status_code=400,
-                            detail=f"action must be one of {sorted(_VALID_COMMANDS)}")
-    if agent_id not in _KNOWN_AGENTS:
-        raise HTTPException(status_code=404, detail=f"unknown agent {agent_id!r}")
-    raise HTTPException(status_code=501, detail=_AGENT_CONTROL_501)
-
-
-@app.post("/v1/admin/prune")
-def v1_admin_prune(body: dict = Body(default=None),
-                   _auth: None = Depends(_auth)) -> dict:
-    """Run retention pruning (viewer auth).  Body: {"days": 14, "dry_run": false}.
-
-    Deletes snapshots/events/approvals older than ``days`` and reports
-    before/deleted counts per table.  Idempotent — safe to call from a cron.
-    """
-    body = body or {}
-    days = int(body.get("days", retention.RETENTION_DAYS))
-    dry_run = bool(body.get("dry_run", False))
-    return retention.prune(days=days, dry_run=dry_run)
+    return _decision_page(f"{label} \u2014 {updated.get('agent','')} {updated.get('action','')}",
+                          ok=True)
 
 
 @app.get("/v1/approvals/{request_id}/wait")

@@ -238,7 +238,7 @@ function drawAgents(){
 function drawTasks(){
   var T=S.tasks||[],byId={};T.forEach(function(t){byId[t.id]=t;});
   $("cols").innerHTML=[["Queued",S.queued],["Running",(S.running!=null?S.running:T.filter(function(t){return t.status==="running"}).length)],["Done",S.done],["Failed",S.failed]].map(function(c){return '<div class="col"><b>'+c[1]+'</b><span>'+c[0]+'</span></div>'}).join("");
-  var active=T.filter(function(t){return t.status!=="done"&&t.status!=="failed";});
+  var active=T.filter(function(t){return t.status!=="done"&&t.status!=="failed"&&t.status!=="archived";});
   var groups={};
   active.forEach(function(t){var pid=(t.parent_id?String(t.parent_id).split(",")[0]:t.id);if(!groups[pid])groups[pid]={p:byId[pid]||t,k:[]};if(pid!==t.id)groups[pid].k.push(t);});
   var order=Object.keys(groups).sort(function(a,b){return ((groups[b].p.priority||0)-(groups[a].p.priority||0))});
@@ -415,6 +415,7 @@ function mapState(state){
   S.cost=(state.cost_forecast&&state.cost_forecast.daily&&state.cost_forecast.daily.length)?(state.cost_forecast.daily[0].cost_usd||0):(k.total_cost_usd||0); /* spend TODAY (most recent day bucket), not lifetime total */
   S.budget=(state.cost_forecast&&state.cost_forecast.budget_usd)||BUD;BUD=S.budget;
   S.calls=state.tool_counts||{};
+  S.tasks=state.tasks||[];
   var topFacts=(state.memory&&state.memory.facts)||[];
   var memByName={};(state.agents||[]).forEach(function(ra){memByName[ra.name]=(ra.memory&&ra.memory.facts)||[];});
   MEM={};A.forEach(function(a){var facts=memByName[a.n]||[];if(!facts.length&&a.n==="ceo")facts=topFacts;MEM[a.n]=facts.map(function(f){return [f.text,f.age!=null?ageAgo(f.age):(f.age_s!=null?ageAgo(f.age_s):"")]});});

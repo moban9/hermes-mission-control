@@ -34,6 +34,7 @@ import discord
 import live
 import reducer
 import settings
+import tokens
 
 VIEWER_TOKEN = settings.VIEWER_TOKEN
 INGEST_TOKEN = settings.INGEST_TOKEN
@@ -67,14 +68,17 @@ def _auth(
     token: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ) -> None:
-    """Optional viewer-token gate.  Off unless MC_VIEWER_TOKEN is set."""
+    """Viewer gate: the owner token never expires; guest tokens are TTL-bound."""
     if not VIEWER_TOKEN:
         return
     provided = token
     if not provided and authorization and authorization.lower().startswith("bearer "):
         provided = authorization[7:].strip()
-    if provided != VIEWER_TOKEN:
-        raise HTTPException(status_code=401, detail="invalid or missing viewer token")
+    if provided == VIEWER_TOKEN:
+        return
+    if tokens.check(provided):
+        return
+    raise HTTPException(status_code=401, detail="invalid, expired, or missing viewer token")
 
 
 def _bearer(authorization: str | None) -> str:

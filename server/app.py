@@ -455,4 +455,23 @@ async def v1_approval_wait(request_id: str, timeout: int = 25,
 # Mount the static dashboard last: /healthz, /v1/state, /v1/stream and
 # /v1/snapshots are registered above and match first; any other path is served
 # from web/ (index.html for "/").
+@app.middleware("http")
+async def _no_cache_html(request, call_next):
+    """Never let a browser reuse a stale dashboard.
+
+    The page is a single self-contained HTML file; a cached copy silently runs
+    old JS (controls appear dead after a fix). HTML gets no-store, everything
+    else must revalidate.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    else:
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 app.mount("/", StaticFiles(directory=_WEB_DIR, html=True), name="dashboard")

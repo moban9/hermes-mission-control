@@ -154,6 +154,12 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 .card.logs.collapsed{max-height:none}
 #log{max-height:calc(42vh - 46px);height:auto;overflow-y:auto}
 @media(max-width:760px){.card.logs{top:auto;bottom:10px;right:8px;left:8px;width:auto;max-height:34vh}#log{max-height:calc(34vh - 46px)}}
+
+/* draggable live-feed overlay */
+.card.logs h2{cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+.card.logs.dragging{cursor:grabbing;opacity:.96}
+.card.logs.dragging h2{cursor:grabbing}
+.logs-grip{display:inline-block;margin-left:8px;color:var(--mu);font-size:11px;letter-spacing:2px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -626,6 +632,52 @@ function bootLive(){
  * Boot: ?demo=1 runs the original simulation; otherwise wire live data        *
  * ------------------------------------------------------------------------- */
 if(/[?&]demo=1/.test(location.search)){demoMode();}else{bootLive();}
+})();
+
+/* ---------- draggable event overlay (position remembered per browser) ---------- */
+(function(){
+  var card=document.getElementById('logsCard');
+  if(!card)return;
+  var KEY='mc_logs_pos';
+  function clamp(x,y){
+    var w=card.offsetWidth||380, h=card.offsetHeight||200;
+    return [Math.max(4,Math.min(window.innerWidth-w-4,x)), Math.max(4,Math.min(window.innerHeight-40,y))];
+  }
+  function place(x,y){
+    var c=clamp(x,y);
+    card.style.setProperty('left',c[0]+'px','important');
+    card.style.setProperty('top',c[1]+'px','important');
+    card.style.setProperty('right','auto','important');
+    return c;
+  }
+  var saved=null; try{saved=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
+  if(saved&&typeof saved.x==='number')place(saved.x,saved.y);
+  var drag=null;
+  card.addEventListener('pointerdown',function(e){
+    if(e.target.closest('button')||e.target.closest('input')||e.target.closest('select'))return;
+    var r=card.getBoundingClientRect();
+    drag={dx:e.clientX-r.left,dy:e.clientY-r.top,id:e.pointerId};
+    card.classList.add('dragging');
+    try{card.setPointerCapture(e.pointerId);}catch(err){}
+  });
+  card.addEventListener('pointermove',function(e){
+    if(!drag)return;
+    place(e.clientX-drag.dx,e.clientY-drag.dy);
+    e.preventDefault();
+  });
+  function end(e){
+    if(!drag)return; drag=null; card.classList.remove('dragging');
+    var r=card.getBoundingClientRect();
+    try{localStorage.setItem(KEY,JSON.stringify({x:Math.round(r.left),y:Math.round(r.top)}));}catch(err){}
+  }
+  card.addEventListener('pointerup',end);
+  card.addEventListener('pointercancel',end);
+  window.addEventListener('resize',function(){
+    if(card.style.left){var r=card.getBoundingClientRect();place(r.left,r.top);}
+  });
+  var grip=document.createElement('span');
+  grip.className='logs-grip'; grip.textContent='\u28ff'; grip.title='Drag to move';
+  var h2=card.querySelector('h2'); if(h2)h2.appendChild(grip);
 })();
 </script>
 </body>

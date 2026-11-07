@@ -71,12 +71,26 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .task .bar{grid-column:2/4}
 .chips{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:transparent;color:var(--mu);border-radius:99px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer;min-height:30px}
+.chip[data-f="info"]{color:var(--cy);border-color:color-mix(in srgb,var(--cy) 45%,transparent)}
+.chip[data-f="warn"]{color:var(--am);border-color:color-mix(in srgb,var(--am) 45%,transparent)}
+.chip[data-f="error"]{color:var(--rd);border-color:color-mix(in srgb,var(--rd) 45%,transparent)}
 .chip.on{color:var(--tx);border-color:var(--cy);background:var(--glow)}
+.chip.on[data-f="all"]{color:var(--tx);border-color:var(--mu);background:color-mix(in srgb,var(--mu) 18%,transparent)}
+.chip.on[data-f="info"]{color:#04111c;border-color:var(--cy);background:var(--cy)}
+.chip.on[data-f="warn"]{color:#1a0e00;border-color:var(--am);background:var(--am)}
+.chip.on[data-f="error"]{color:#1a0310;border-color:var(--rd);background:var(--rd)}
 #log{height:260px;overflow-y:auto;font-size:12px;line-height:1.55;padding-right:4px}
-#log div{padding:2px 0;border-bottom:1px dashed var(--line);display:flex;gap:8px}
+#log div{padding:3px 7px;margin:2px 0;border-bottom:1px solid var(--line);border-left:2px solid transparent;border-radius:6px;display:flex;gap:8px}
 #log time{color:var(--mu);flex:none}
 #log .a{color:var(--cy);flex:none;min-width:58px}
-.lv-warn{color:var(--am)}.lv-error{color:var(--rd)}
+#log div>span:last-child{color:var(--tx)}
+#log .lv-info time{color:var(--cy)}
+#log .lv-warn{background:rgba(255,189,89,.08);border-left-color:var(--am)}
+#log .lv-warn time{color:var(--am)}
+#log .lv-warn .a{color:var(--am)}
+#log .lv-error{background:rgba(255,93,122,.08);border-left-color:var(--rd)}
+#log .lv-error time{color:var(--rd)}
+#log .lv-error .a{color:var(--rd)}
 .spark{width:100%;height:70px;display:block}
 .pm{display:flex;justify-content:space-between;font-size:12px;color:var(--mu);margin:10px 0 2px}
 .pm b{color:var(--tx);font-weight:600}
@@ -123,12 +137,13 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 .card.logs{
   position:fixed; top:64px; right:16px; width:min(430px,92vw); max-height:42vh;
   z-index:999; margin:0; padding:12px 14px;
-  background:rgba(16,12,34,.94); border:1px solid var(--vi);
-  box-shadow:0 18px 50px rgba(0,0,0,.55);
+  background:linear-gradient(180deg,rgba(26,20,52,.96),rgba(16,12,34,.94)); border:1px solid var(--vi);
+  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 1px rgba(165,139,255,.18),0 0 26px rgba(77,225,255,.16),0 0 56px rgba(165,139,255,.20);
   backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
   border-radius:14px; overflow:hidden;
 }
 .card.logs h2{color:var(--vi);margin:0 0 8px}
+.card.logs .logs-title{background:linear-gradient(90deg,var(--cy),var(--vi));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
 .card.logs h2 small{color:var(--mu)}
 .card.logs h2 .logs-toggle{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;padding:0;background:transparent;border:1px solid var(--line);border-radius:7px;color:var(--mu);cursor:pointer}
 .card.logs h2 .logs-toggle:hover{color:var(--vi);border-color:var(--vi)}
@@ -147,7 +162,6 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   <div><h1>Hermes mission control</h1><div class="sub mono" id="clock">session 00:00:00</div></div>
   <div class="sp"></div>
   <div class="live"><span class="dot"></span><span id="livet">Live</span></div>
-  <button class="btn" id="pauseAll">Pause all</button>
 </header>
 <main>
   <section class="kpis" id="kpis"></section>
@@ -164,12 +178,12 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   </section>
 
   <section class="card agents">
-    <h2>Subagents <small>Tap pause to hold an agent</small></h2>
+    <h2>Subagents <small>Live status and activity</small></h2>
     <div class="grid" id="agents"></div>
   </section>
 
   <section class="card logs" id="logsCard">
-    <h2>Live event stream
+    <h2><span class="logs-title">Live event stream</span>
       <button class="logs-toggle" id="logsToggle" type="button" aria-label="Toggle live event stream" aria-expanded="true" aria-controls="logsBody">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 10l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -272,7 +286,7 @@ function drawTopo(){
   $("topo").innerHTML=s;
 }
 function drawAgents(){
-  $("agents").innerHTML=A.map(function(a,i){return '<div class="ag '+a.s+'"><div class="top"><span class="nm">'+a.n+'</span><span class="badge">'+a.s+'</span></div><div class="role">'+a.r+'</div><div class="now">'+a.act+'</div><div class="meta mono"><span>'+a.task.id+'</span><button data-i="'+i+'">'+(a.s=="paused"?"Resume":"Pause")+'</button></div></div>'}).join("");
+  $("agents").innerHTML=A.map(function(a,i){return '<div class="ag '+a.s+'"><div class="top"><span class="nm">'+a.n+'</span><span class="badge">'+a.s+'</span></div><div class="role">'+a.r+'</div><div class="now">'+a.act+'</div><div class="meta mono"><span>'+a.task.id+'</span></div></div>'}).join("");
 }
 function drawTasks(){
   var T=S.tasks||[],byId={};T.forEach(function(t){byId[t.id]=t;});
@@ -291,7 +305,7 @@ function drawTasks(){
 function drawKpi(){
   var act=A.filter(function(a){return a.s=="running"||a.s=="thinking"}).length;
   var rate=Math.round(S.done/(S.done+S.failed)*100);
-  var k=[["Active subagents",act+"/"+A.length,"All healthy","up"],["Tasks completed",S.done,"+3 in the last hour","up"],["Success rate",rate+"%",S.failed+" failed","dn"],["Tokens per second",Math.round(S.tps[S.tps.length-1]),"steady","up"],["Spend today","$"+S.cost.toFixed(2),"of $"+BUD+" budget","up"]];
+  var k=[["Active subagents",act+"/"+A.length,"All healthy","up"],["Tasks completed",S.done,"+3 in the last hour","up"],["Success rate",rate+"%",S.failed+" failed","dn"],["Tokens per second",Math.round(S.tps[S.tps.length-1]),"steady","up"],["Spend today (WIB)","$"+S.cost.toFixed(2),"of $"+BUD+" budget","up"]];
   $("kpis").innerHTML=k.map(function(x){return '<div class="kpi"><span>'+x[0]+'</span><b>'+x[1]+'</b><i class="'+x[3]+'">'+x[2]+'</i></div>'}).join("");
 }
 function actGroup(a){
@@ -343,8 +357,8 @@ function clock(){var t=Math.floor((Date.now()-S.start)/1000);$("clock").textCont
 /* ------------------------------------------------------------------------- *
  * Interaction listeners (shared by demo and live modes)                       *
  * ------------------------------------------------------------------------- */
-$("agents").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var a=A[+b.dataset.i];if(a.s=="paused"){a.s="running";log(a.n,"info","Resumed by operator")}else{a.s="paused";a.act="Paused by operator";log(a.n,"warn","Paused by operator")}drawAll()});
-$("pauseAll").addEventListener("click",function(){S.paused=!S.paused;document.body.classList.toggle("paused",S.paused);$("pauseAll").textContent=S.paused?"Resume all":"Pause all";$("livet").textContent=S.paused?"Paused":"Live";log("Hermes",S.paused?"warn":"info",S.paused?"All agents on hold":"All agents resumed")});
+/* Pause/Resume + Pause-all controls removed — the server exposes no pause mechanism,
+   so these were dead affordances that only faked local state (Randy: no cosmetic controls). */
 $("chips").innerHTML=["all","info","warn","error"].map(function(f){return '<button class="chip'+(f=="all"?" on":"")+'" data-f="'+f+'">'+f[0].toUpperCase()+f.slice(1)+'</button>'}).join("");
 $("chips").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;S.filter=b.dataset.f;[].forEach.call($("chips").children,function(c){c.classList.toggle("on",c===b)});[].forEach.call($("log").children,function(r){if(!r.dataset.fhint)r.hidden=S.filter!=="all"&&r.dataset.l!==S.filter});var vis=[].filter.call($("log").children,function(r){return !r.hidden&&!r.dataset.fhint}).length;var h=$("log").querySelector("[data-fhint]");if(!vis&&!h){var d=document.createElement("div");d.dataset.fhint="1";d.className="empty";d.textContent="No "+S.filter+" events in the current window.";$("log").appendChild(d);}else if(vis&&h){h.remove();}});
 $("appr").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;var id=+(b.dataset.a||b.dataset.d),ok=!!b.dataset.a,i=AP.findIndex(function(x){return x.id===id});if(i<0)return;if(LIVE){decideApproval(id,ok);return;}var x=AP.splice(i,1)[0],a=A.filter(function(q){return q.n==x.ag})[0];if(ok){log(x.ag,"info","Approved: "+x.text);if(a&&a.s!="paused"){a.s="running";a.act="Executing approved action"}}else{log(x.ag,"warn","Denied: "+x.text);if(a&&a.s!="paused"){a.s="thinking";a.act="Replanning after denial"}}drawAppr();drawAll()});

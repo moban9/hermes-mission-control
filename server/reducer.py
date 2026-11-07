@@ -353,8 +353,30 @@ def reduce_usage() -> dict:
     }
 
 
+def _tz():
+    """Local day boundary for cost reporting (default: Randy's WIB)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(os.environ.get("MC_TZ", "Asia/Jakarta"))
+    except Exception:
+        from datetime import timezone, timedelta
+        return timezone(timedelta(hours=7))
+
+
+def _local_day(ts: float) -> str:
+    from datetime import datetime
+    return datetime.fromtimestamp(float(ts), _tz()).strftime("%Y-%m-%d")
+
+
 def reduce_daily_cost() -> list[dict]:
-    """Daily estimated cost across every profile (last 14 days, newest first)."""
+    """Daily estimated cost across every profile, newest first.
+
+    A session's cost is spread **pro-rata over its own [started_at,
+    last_activity_at] window** rather than dumped on its final day, and each
+    slice is bucketed by the LOCAL calendar day (MC_TZ, default Asia/Jakarta).
+    Sessions that never overlapped a day boundary land entirely on their start
+    day.  Invariant: sum(daily cost) == sum(session cost).
+    """
     daily: dict[str, dict] = {}
     for _, path in db.profiles():
         try:
@@ -363,26 +385,42 @@ def reduce_daily_cost() -> list[dict]:
             continue
         try:
             rows = con.execute(
-                """
-                SELECT strftime('%Y-%m-%d', datetime(last_activity_at, 'unixepoch')) AS d,
-                       COUNT(*) AS sessions,
-                       COALESCE(SUM(estimated_cost_usd), 0) AS cost_usd
-                FROM sessions
-                WHERE last_activity_at IS NOT NULL
-                GROUP BY d
-                """
+                "SELECT started_at, last_activity_at, estimated_cost_usd FROM sessions"
             ).fetchall()
+        except Exception:
+            rows = []
         finally:
             con.close()
-        for r in rows:
-            d = r["d"]
-            if d is None:
-                continue
-            entry = daily.setdefault(d, {"date": d, "sessions": 0, "cost_usd": 0.0})
-            entry["sessions"] += int(r["sessions"] or 0)
-            entry["cost_usd"] += float(r["cost_usd"] or 0.0)
 
-    out = sorted(daily.values(), key=lambda e: e["date"], reverse=True)[:14]
+        for r in rows:
+            cost = float(r["estimated_cost_usd"] or 0.0)
+            start_ts = r["started_at"] or r["last_activity_at"]
+            if not start_ts:
+                continue
+            end_ts = r["last_activity_at"] or start_ts
+            if end_ts < start_ts:
+                end_ts = start_ts
+
+            span = end_ts - start_ts
+            day = _local_day(start_ts)
+            entry = daily.setdefault(day, {"date": day, "sessions": 0, "cost_usd": 0.0})
+            entry["sessions"] += 1
+            if span <= 0 or cost <= 0:
+                entry["cost_usd"] += cost
+                continue
+
+            # walk the window in day-sized chunks and allocate by overlap
+            cursor = start_ts
+            while cursor <= end_ts:
+                chunk_end = min(end_ts, cursor + 86400.0)
+                overlap = chunk_end - cursor
+                share = cost * (overlap / span) if span else cost
+                d = _local_day(cursor)
+                e = daily.setdefault(d, {"date": d, "sessions": 0, "cost_usd": 0.0})
+                e["cost_usd"] += share
+                cursor = chunk_end + 0.001
+
+    out = sorted(daily.values(), key=lambda e: e["date"], reverse=True)
     for e in out:
         e["cost_usd"] = round(e["cost_usd"], 6)
     return out
@@ -492,7 +530,7 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
     failure_events = reduce_failure_events(now)
     approvals = db.list_pending_approvals()
 
-    today = time.strftime("%Y-%m-%d", time.gmtime(now))
+    today = _local_day(now)
     today_cost = sum(d["cost_usd"] for d in daily if d["date"] == today)
 
     total_cost = sum(a["cost_usd"] for a in agents)

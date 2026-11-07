@@ -67,6 +67,8 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .col b{display:block;font-size:20px}.col span{font-size:11.5px;color:var(--mu)}
 .task{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;padding:9px 0;border-top:1px solid var(--line);align-items:center}
 .task .id{color:var(--mu);font-size:11.5px}
+.task.approval{border-left:3px solid var(--am);background:color-mix(in srgb,var(--am) 10%,transparent)}
+.task.approval .tt{color:var(--am);white-space:normal}
 .task .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .task .bar{grid-column:2/4}
 .chips{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
@@ -341,12 +343,26 @@ function drawTasks(){
   var groups={};
   active.forEach(function(t){var pid=(t.parent_id?String(t.parent_id).split(",")[0]:t.id);if(!groups[pid])groups[pid]={p:byId[pid]||t,k:[]};if(pid!==t.id)groups[pid].k.push(t);});
   var order=Object.keys(groups).sort(function(a,b){return ((groups[b].p.priority||0)-(groups[a].p.priority||0))});
-  $("tasks").innerHTML=order.length?order.map(function(k){
+  var _apRows=(AP||[]).map(function(a){
+    return '<div class="task approval"><span class="id mono">AWAIT</span>'+
+      '<span class="tt">Approval: '+String(a.text||"").replace(/[<>]/g,"")+'</span>'+
+      '<span class="badge" style="font-size:10.5px;padding:1px 8px">'+a.ag+' \u00b7 '+a.risk+' risk</span>'+
+      '<span style="display:flex;gap:6px;margin-left:auto">'+
+        '<button class="apbtn ok" data-ok="1" data-ap="'+a.id+'" style="padding:4px 10px;border-radius:7px;border:0;cursor:pointer;font:600 11px system-ui;background:#2f9e5f;color:#fff">Approve</button>'+
+        '<button class="apbtn no" data-ok="0" data-ap="'+a.id+'" style="padding:4px 10px;border-radius:7px;border:1px solid var(--rd);cursor:pointer;font:600 11px system-ui;background:none;color:var(--rd)">Deny</button>'+
+      '</span></div>';
+  }).join("");
+  $("tasks").innerHTML=(_apRows||order.length)?_apRows+order.map(function(k){
     var g=groups[k],p=g.p,agents=(g.k.length?g.k:[p]);
     return '<div class="task '+p.status+'"><span class="id mono">'+p.id+'</span><span class="tt">'+p.title+'</span>'+
       agents.map(function(c){return '<span class="badge" style="font-size:10.5px;padding:1px 8px">'+(c.assignee||'\u2014')+' \u00b7 '+c.status+'</span>'}).join("")+'</div>';
   }).join(""):'<div class="empty">No active tasks.</div>';
-  $("qsum").textContent=active.length+" active";
+  $("qsum").textContent=active.length+" active"+((AP&&AP.length)?" \u00b7 "+AP.length+" awaiting approval":"");
+}
+function wireTaskApprovals(){
+  var box=$("tasks");if(!box||box.dataset.apwired)return;box.dataset.apwired="1";
+  box.addEventListener("click",function(e){var b=e.target.closest(".apbtn");if(!b)return;
+    e.stopPropagation();decideApproval(b.dataset.ap,b.dataset.ok==="1");});
 }
 function drawKpi(){
   var act=A.filter(function(a){return a.s=="running"||a.s=="thinking"}).length;
@@ -443,6 +459,7 @@ $("chips").insertAdjacentHTML("afterend",'<div id="logEmpty">No events at this l
     }).catch(function(e){log("system","error","Stuck check failed: "+e);})
     .then(function(){b.disabled=false;b.textContent=old;});
   });})();
+wireTaskApprovals();
 function chipCounts(){
   var rows=[].slice.call($("log").children),n={all:rows.length,info:0,warn:0,error:0},vis=0;
   rows.forEach(function(r){n[r.dataset.l]=(n[r.dataset.l]||0)+1;if(!r.hidden)vis++;});

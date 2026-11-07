@@ -133,7 +133,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 
   <section class="card topo">
     <h2>Agent network <small>Hermes orchestrator and subagents</small></h2>
-    <svg id="topo" viewBox="0 0 400 250" role="img" aria-label="Network of Hermes and its subagents"></svg>
+    <svg id="topo" viewBox="0 0 460 360" role="img" aria-label="Network of Hermes and its subagents"></svg>
   </section>
 
   <section class="card queue">
@@ -224,12 +224,24 @@ function unraise(k){if(AL[k]){delete AL[k];drawAlerts()}}
  * ------------------------------------------------------------------------- */
 function drawTopo(){
   var s='<defs><radialGradient id="g"><stop offset="0" stop-color="var(--cy)" stop-opacity=".9"/><stop offset="1" stop-color="var(--vi)" stop-opacity=".7"/></radialGradient></defs>';
-  var cx=200,cy=125,pos=[];
-  A.forEach(function(a,i){var ang=-Math.PI/2+i*2*Math.PI/Math.max(1,A.length);pos.push([cx+Math.cos(ang)*140,cy+Math.sin(ang)*88])});
-  s+='<ellipse cx="200" cy="125" rx="140" ry="88" fill="none" stroke="var(--line)" stroke-dasharray="2 6"/>';
-  A.forEach(function(a,i){var p=pos[i];s+='<line class="link" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>';if(a.s=="running"||a.s=="thinking")s+='<line class="flow" x1="200" y1="125" x2="'+p[0]+'" y2="'+p[1]+'"/>'});
-  s+='<circle class="ring" cx="200" cy="125" r="34" fill="var(--cy)" opacity=".18"/><circle cx="200" cy="125" r="26" fill="url(#g)"/><text x="200" y="129" text-anchor="middle" font-size="11" font-weight="700" fill="#05101f">Hermes</text>';
-  A.forEach(function(a,i){var p=pos[i],c=cols[a.s]||"var(--mu)";s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="var(--bg2)" stroke="'+c+'" stroke-width="2"/>'+(a.s=="running"?'<circle class="ring" cx="'+p[0]+'" cy="'+p[1]+'" r="20" fill="'+c+'" opacity=".25"/>':'')+'<text x="'+p[0]+'" y="'+(p[1]+3.5)+'" text-anchor="middle" font-size="9.5" font-weight="600" fill="var(--tx)">'+a.n+'</text><text x="'+p[0]+'" y="'+(p[1]+(p[1]>125?36:-27))+' " text-anchor="middle" font-size="9" fill="var(--mu)">'+whatDoing(a)+'</text>'});
+  var CX=230,CY=180,RX=196,RY=146,R=20,pos=[];
+  A.forEach(function(a,i){var ang=-Math.PI/2+i*2*Math.PI/Math.max(1,A.length);pos.push([CX+Math.cos(ang)*RX,CY+Math.sin(ang)*RY])});
+  s+='<ellipse cx="'+CX+'" cy="'+CY+'" rx="'+RX+'" ry="'+RY+'" fill="none" stroke="var(--line)" stroke-dasharray="2 6"/>';
+  A.forEach(function(a,i){var p=pos[i];s+='<line class="link" x1="'+CX+'" y1="'+CY+'" x2="'+p[0]+'" y2="'+p[1]+'"/>';if(a.s==="running"||a.s==="thinking")s+='<line class="flow" x1="'+CX+'" y1="'+CY+'" x2="'+p[0]+'" y2="'+p[1]+'"/>'});
+  s+='<circle class="ring" cx="'+CX+'" cy="'+CY+'" r="36" fill="var(--cy)" opacity=".18"/><circle cx="'+CX+'" cy="'+CY+'" r="27" fill="url(#g)"/><text x="'+CX+'" y="'+(CY+4)+'" text-anchor="middle" font-size="11" font-weight="700" fill="#05101f">Hermes</text>';
+  A.forEach(function(a,i){
+    var p=pos[i],c=cols[a.s]||"var(--mu)",busy=(a.s!=="offline"&&a.s!=="paused");
+    var full=whatDoing(a),lbl=busy?full:"";
+    if(lbl.length>12)lbl=lbl.slice(0,11)+"\u2026";
+    var out=(p[1]>=CY)?1:-1;
+    var ly=p[1]+out*32;
+    s+='<g><title>'+a.n+' \u00b7 '+a.s+(busy?' \u00b7 '+full:'')+'</title>'
+      +'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+R+'" fill="var(--bg2)" stroke="'+c+'" stroke-width="2"/>'
+      +(busy?'<circle class="ring" cx="'+p[0]+'" cy="'+p[1]+'" r="'+R+'" fill="'+c+'" opacity=".22"/>':'')
+      +'<text x="'+p[0]+'" y="'+(p[1]+3)+'" text-anchor="middle" font-size="8.3" font-weight="600" fill="var(--tx)">'+a.n+'</text>'
+      +(lbl?'<text x="'+p[0]+'" y="'+ly+'" text-anchor="middle" font-size="7.6" fill="var(--mu)">'+lbl+'</text>':'')
+      +'</g>';
+  });
   $("topo").innerHTML=s;
 }
 function drawAgents(){

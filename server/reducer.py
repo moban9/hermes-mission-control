@@ -201,7 +201,9 @@ def reduce_tasks() -> tuple[list[dict], dict]:
             """
             SELECT id, title, assignee, status, priority, created_at,
                    started_at, completed_at, block_kind, consecutive_failures,
-                   workspace_path
+                   workspace_path,
+                   (SELECT group_concat(parent_id) FROM task_links WHERE child_id = tasks.id) AS parent_ids,
+                   (SELECT COUNT(*) FROM task_links WHERE parent_id = tasks.id) AS child_count
             FROM tasks ORDER BY created_at DESC
             """
         ).fetchall()
@@ -237,6 +239,8 @@ def reduce_tasks() -> tuple[list[dict], dict]:
             "started_at": r["started_at"],
             "completed_at": r["completed_at"],
             "block_kind": r["block_kind"],
+            "parent_id": r["parent_ids"],
+            "child_count": r["child_count"] or 0,
         })
     return tasks, kpi
 

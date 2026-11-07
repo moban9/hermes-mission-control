@@ -452,7 +452,41 @@ function drawAlerts(){var ks=Object.keys(AL);$("acount").textContent=ks.length?k
 function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Nothing pending";setH("appr",AP.length?AP.map(function(x){return '<div class="row"><span class="sev '+x.risk+'"></span><div class="tx">'+x.ag+' wants to '+x.text+'<small>'+x.risk+' risk, requested '+x.t+'</small></div><button data-d="'+x.id+'">Deny</button><button class="ok" data-a="'+x.id+'">Approve</button></div>'}).join(""):'<div class="empty">No pending requests. Risky actions pause here until you decide.</div>')}
 function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
 function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div>'}
-function drawReplay(){var n=H.length,cur=rp===null?n-1:rp,s="";H.forEach(function(h,j){h.st.forEach(function(st,i){s+='<rect x="'+j*3+'" y="'+i*12+'" width="2.6" height="11" rx="1" fill="'+cols[st]+'"/>'})});s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="60" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';$("heat").innerHTML=s;var h=H[cur];if(!h){$("rpt").textContent="Live";$("rpa").innerHTML="";$("rpi").textContent="";return;}$("rpt").textContent=rp===null?"Live":"Viewing "+h.t;$("rpa").innerHTML=A.map(function(a,i){return '<span class="chip on" style="color:'+cols[h.st[i]]+'">'+a.n+': '+h.st[i]+', '+h.tk[i]+'</span>'}).join("");$("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals"}
+function drawReplay(){
+  var n=H.length,cur=rp===null?n-1:rp;
+  /* Rows are only for agents that have actually done something: an offline
+     agent is an empty row that says nothing and pushes the real ones apart. */
+  var active=A.map(function(a,i){return i;}).filter(function(i){
+    return H.some(function(h){return h.st&&h.st[i]&&h.st[i]!=="offline";});
+  });
+  var rowOf={};active.forEach(function(i,r){rowOf[i]=r;});
+  var rows=Math.max(1,active.length),s="";
+  H.forEach(function(h,j){
+    active.forEach(function(i){
+      var st=h.st&&h.st[i];
+      if(!st||st==="offline")return;
+      s+='<rect x="'+(j*3)+'" y="'+(rowOf[i]*12)+'" width="2.6" height="11" rx="1" fill="'+(cols[st]||"#333")+'"/>';
+    });
+  });
+  s+='<rect x="'+(cur*3-1)+'" y="0" width="4.6" height="'+rows*12+'" fill="none" stroke="var(--tx)" vector-effect="non-scaling-stroke"/>';
+  var hv=$("heat");
+  hv.setAttribute("viewBox","0 0 "+Math.max(60,n*3)+" "+(rows*12));
+  hv.innerHTML=s;
+  var h=H[cur];
+  if(!h){$("rpt").textContent="Live";$("rpa").innerHTML="";$("rpi").textContent="";return;}
+  var live=rp===null;
+  $("rpt").textContent=live?"Live":"Viewing "+h.t;
+  var rowsNow=A.map(function(a,i){return {a:a,i:i,st:h.st&&h.st[i]};})
+               .filter(function(x){return x.st&&x.st!=="offline";});
+  if(!rowsNow.length){
+    $("rpa").innerHTML='<div class="empty" style="padding:6px 0">No agent was active at this moment \u2014 all offline.</div>';
+  }else{
+    $("rpa").innerHTML=rowsNow.map(function(x){
+      return '<span class="chip on" style="color:'+(cols[x.st]||"var(--tx)")+'">'+x.a.n+': '+x.st+', '+(h.tk[x.i]||"")+'</span>';
+    }).join("");
+  }
+  $("rpi").textContent=h.done+" done, $"+h.cost.toFixed(2)+", "+Math.round(h.tps)+" tokens/s, "+h.ap+" pending approvals";
+}
 function drawFc(){
   var fc=S.fc||{},n=H.length,hasFc=(fc.projected_usd!=null);
   var burn=hasFc?fc.burn_per_hour:0, proj=hasFc?fc.projected_usd:0;

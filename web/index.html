@@ -474,7 +474,7 @@ function trackTps(state){
 }
 function syncAlerts(list){
   var seen={};
-  (list||[]).forEach(function(a){var key=a.kind+(a.agent?":"+a.agent:"");seen[key]=1;if(DM[key]&&Date.now()-DM[key]<45000)return;AL[key]={sev:a.severity==="critical"?"crit":"warn",msg:a.message,ag:a.agent||"Hermes",t:fmtT(a.raised_at)}});
+  (list||[]).forEach(function(a){var key=a.kind+(a.agent?":"+a.agent:"");seen[key]=1;if(DM[key]&&Date.now()-DM[key]<45000)return;AL[key]={sev:a.severity==="critical"?"crit":"warn",msg:a.message,ag:a.agent||"Onendo",t:fmtT(a.raised_at)}});
   Object.keys(AL).forEach(function(k){if(!seen[k])delete AL[k]});
   drawAlerts();
 }
@@ -591,7 +591,7 @@ function onSSE(e){
   drawAll();drawMem();drawAppr();
   setConn("live");
 }
-function onSSEAlert(e){try{var a=JSON.parse(e.data);if(a&&a.kind){var key=a.kind+(a.agent?":"+a.agent:"");if(a.raised===false){delete AL[key];}else{AL[key]={sev:a.severity==="critical"?"crit":"warn",msg:a.message,ag:a.agent||"Hermes",t:fmtT(a.raised_at)};}drawAlerts();}}catch(err){}}
+function onSSEAlert(e){try{var a=JSON.parse(e.data);if(a&&a.kind){var key=a.kind+(a.agent?":"+a.agent:"");if(a.raised===false){delete AL[key];}else{AL[key]={sev:a.severity==="critical"?"crit":"warn",msg:a.message,ag:a.agent||"Onendo",t:fmtT(a.raised_at)};}drawAlerts();}}catch(err){}}
 function onSSEApproval(e){try{var a=JSON.parse(e.data);if(a&&a.id){var i=AP.findIndex(function(x){return x.id===a.id});if(a.status==="pending"){if(i<0)AP.push({id:a.id,ag:a.agent,text:a.text,risk:a.risk||"med",t:fmtT(a.requested_at)});}else if(i>=0){AP.splice(i,1);}}drawAppr();}catch(err){}}
 function onSSEEvent(e){try{var v=JSON.parse(e.data);if(v&&v.agent){logAt(v.agent,v.level||"info",v.text||v.tool_name||"",fmtT(v.ts));}}catch(err){}}
 async function connect(){

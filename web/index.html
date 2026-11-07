@@ -171,28 +171,17 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 .card.logs.dragging h2{cursor:grabbing}
 .logs-grip{display:inline-block;margin-left:8px;color:var(--mu);font-size:11px;letter-spacing:2px;vertical-align:middle}
 
-.org{--orgnode:#141826}
-#orgChart{display:flex;flex-direction:column;align-items:center;gap:0}
-.org-row{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;position:relative}
-.org-teams{display:flex;gap:14px;justify-content:center;align-items:flex-start;flex-wrap:wrap;margin-top:26px;position:relative}
-.org-teams:before{content:"";position:absolute;top:-14px;left:12%;right:12%;height:1px;background:var(--line)}
-.org-team{display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;padding-top:14px}
-.org-team:before{content:"";position:absolute;top:0;left:50%;width:1px;height:14px;background:var(--line)}
-.org-kids{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding-top:12px;position:relative}
-.org-kids:before{content:"";position:absolute;top:0;left:10%;right:10%;height:1px;background:var(--line)}
-.org-kid{position:relative;padding-top:12px}
-.org-kid:before{content:"";position:absolute;top:0;left:50%;width:1px;height:12px;background:var(--line)}
-.onode{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:92px;padding:7px 10px;border:1px solid var(--line);
-  border-radius:10px;background:var(--orgnode);color:var(--tx);cursor:pointer;font:600 12px system-ui;transition:border-color .15s,transform .15s}
-.onode:hover{border-color:var(--cy);transform:translateY(-1px)}
-.onode small{font-weight:400;font-size:9.5px;color:var(--mu);letter-spacing:.04em;text-transform:uppercase}
-.onode.lead{border-color:color-mix(in srgb,var(--vi) 55%,transparent)}
-.onode.ceo{border-color:var(--vi);min-width:120px}
-.onode.sel{outline:2px solid var(--cy);outline-offset:1px}
-.onode .dot{width:6px;height:6px;border-radius:50%;background:var(--mu);margin-bottom:2px}
-.onode.running .dot,.onode.thinking .dot{background:var(--ok,#2f9e5f)}
-.onode.waiting .dot{background:var(--am)}
-.onode.offline .dot{background:#5a6172}
+/* Org structure: a full-width panel whose tree renders at natural size (no SVG
+   viewBox scaling), so node text never shrinks below ~11px. The chart scrolls
+   horizontally/vertically when it is wider/taller than the panel instead of
+   compressing. (The old flexbox .org-row/.org-teams rules were dead once the
+   chart moved to SVG; removed here.) */
+.org{--orgnode:#141826;grid-column:1/-1}
+#orgChart{overflow:auto;max-height:min(60vh,560px)}
+#orgChart svg{display:block}
+.onode{cursor:pointer}
+.onode:hover rect{stroke:var(--cy)}
+.onode.sel rect{stroke:var(--cy);stroke-width:2.2}
 #orgDetail{background:var(--orgnode);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 #orgDetail .k{color:var(--mu);display:inline-block;min-width:82px;margin-right:8px}
 </style>
@@ -494,7 +483,7 @@ function nodeHtml(name,role,cls){
 function drawOrg(){
   var box=$("orgChart");if(!box)return;
   var LEADS=["kestrel","atlas","keystone","keel"];
-  var NW=148,NH=32,ROW=NH+9,X=[6,176,346],edges=[],nodes=[];
+  var NW=156,NH=36,ROW=NH+10,X=[6,190,374];
   function agentOf(n){return byName(n)||{}}
   // leaves first: they fix the vertical rhythm
   var leaves=[],leadY={};
@@ -502,7 +491,7 @@ function drawOrg(){
   var y=8;
   leaves.forEach(function(f){f.y=y;y+=ROW;});
   LEADS.forEach(function(l){
-    var kid=f=>f.lead===l;var ys=leaves.filter(kid).map(function(f){return f.y;});
+    var ys=leaves.filter(function(f){return f.lead===l;}).map(function(f){return f.y;});
     leadY[l]=ys.length?(ys[0]+ys[ys.length-1])/2:8;
   });
   var leadYs=LEADS.map(function(l){return leadY[l];});
@@ -512,21 +501,23 @@ function drawOrg(){
   function node(name,x,yy,cls){
     var a=agentOf(name),st=a.s||"offline",T=S.tasks||[],run=0;
     T.forEach(function(t){if(t.assignee===name&&t.status==="running")run++;});
-    var role=(cls==="ceo"?"CEO":(LEADS.indexOf(name)>=0?(LEADS&&{"kestrel":"Ops","atlas":"Data","keystone":"Build","keel":"Platform"}[name]):(a.r||"")));
+    var role=(cls==="ceo"?"CEO":(LEADS.indexOf(name)>=0?{"kestrel":"Ops","atlas":"Data","keystone":"Build","keel":"Platform"}[name]:(a.r||"")));
     var dot={running:"#2f9e5f",thinking:"#2f9e5f",waiting:"#ffbd59",offline:"#5a6172"}[st]||"#5a6172";
     return '<g class="onode '+st+'" data-agent="'+name+'" style="cursor:pointer">'+
-      '<rect x="'+x+'" y="'+yy+'" width="'+NW+'" height="'+NH+'" rx="8" fill="#141826" stroke="'+
-        (cls==="ceo"?"#6a4fd8":cls==="lead"?"rgba(106,79,216,.55)":"#232838")+'"/>'+
-      '<circle cx="'+(x+11)+'" cy="'+(yy+16)+'" r="3.4" fill="'+dot+'"/>'+
-      '<text x="'+(x+20)+'" y="'+(yy+13)+'" fill="#e6e8ee" font-size="11.5" font-weight="600">'+name+'</text>'+
-      '<text x="'+(x+20)+'" y="'+(yy+25)+'" fill="#8b93a7" font-size="9">'+String(role).slice(0,26)+(run?" \u00b7 "+run+" running":"")+'</text>'+
+      '<rect x="'+x+'" y="'+yy+'" width="'+NW+'" height="'+NH+'" rx="9" fill="#141826" stroke="'+
+        (cls==="ceo"?"#6a4fd8":cls==="lead"?"rgba(106,79,216,.55)":"#232838")+'" stroke-width="1.2"/>'+
+      '<circle cx="'+(x+13)+'" cy="'+(yy+18)+'" r="3.6" fill="'+dot+'"/>'+
+      '<text x="'+(x+22)+'" y="'+(yy+15)+'" fill="#e6e8ee" font-size="12" font-weight="600">'+name+'</text>'+
+      '<text x="'+(x+22)+'" y="'+(yy+29)+'" fill="#9aa3b8" font-size="11">'+String(role).slice(0,24)+(run?" \u00b7 "+run+" running":"")+'</text>'+
     '</g>';
   }
   function elbow(px,py,cx,cy){
     var mx=(px+cx)/2;
-    return '<path d="M'+px+' '+py+' H'+mx+' V'+cy+' H'+cx+'" fill="none" stroke="#2b3145" stroke-width="1.2"/>';
+    return '<path d="M'+px+' '+py+' H'+mx+' V'+cy+' H'+cx+'" fill="none" stroke="#3d4a68" stroke-width="1.5"/>';
   }
-  var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+Math.min(H,420)+'" preserveAspectRatio="xMinYMin meet" role="img" aria-label="Onendo org structure">';
+  // Render at natural size (width/height == viewBox) so text stays >=11px; the
+  // #orgChart container scrolls instead of shrinking on narrow screens.
+  var s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Onendo org structure">';
   // edges: CEO -> leads, lead -> members
   LEADS.forEach(function(l){
     s+=elbow(X[0]+NW,ceoY+NH/2,X[1],leadY[l]+NH/2);

@@ -35,8 +35,8 @@ main{max-width:1180px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-temp
 .kpi span{color:var(--mu);font-size:12px}
 .kpi i{font-style:normal;font-size:12px}
 .up{color:var(--gr)}.dn{color:var(--rd)}
-.topo{grid-column:1/-1}.agents{grid-column:1/-1}.queue{grid-column:1/-1}.perf{grid-column:1/-1}.tools{grid-column:1/-1}
-@media(min-width:760px){.kpis{grid-template-columns:repeat(5,1fr)}.topo{grid-column:span 7}.queue{grid-column:span 5}.agents{grid-column:span 12}.perf{grid-column:span 12}.tools{grid-column:span 12}}
+.topo{grid-column:1/-1}.queue{grid-column:1/-1}.perf{grid-column:1/-1}.tools{grid-column:1/-1}
+@media(min-width:760px){.kpis{grid-template-columns:repeat(5,1fr)}.topo{grid-column:span 7}.queue{grid-column:span 5}.perf{grid-column:span 12}.tools{grid-column:span 12}}
 svg text{font-family:Sora,system-ui,sans-serif}
 #topo{width:100%;height:auto;display:block}
 .link{stroke:var(--line);stroke-width:1.2}
@@ -47,14 +47,8 @@ svg text{font-family:Sora,system-ui,sans-serif}
 .grid{display:grid;gap:10px;grid-template-columns:1fr}
 @media(min-width:560px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:960px){.grid{grid-template-columns:repeat(3,1fr)}}
-.ag{border:1px solid var(--line);border-radius:14px;padding:12px;background:color-mix(in srgb,var(--bg2) 55%,transparent);position:relative;overflow:hidden}
-.ag::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,var(--cy))}
-.ag .top{display:flex;align-items:center;gap:8px}
-.ag .nm{font-weight:600}
 .badge{margin-left:auto;font-size:11px;padding:3px 9px;border-radius:99px;border:1px solid currentColor}
 .running{--c:var(--cy);color:var(--cy)}.thinking{--c:var(--vi);color:var(--vi)}.waiting{--c:var(--am);color:var(--am)}.error{--c:var(--rd);color:var(--rd)}.paused{--c:var(--mu);color:var(--mu)}.idle{--c:var(--gr);color:var(--gr)}.offline{--c:var(--mu);color:var(--mu)}
-.ag .role{color:var(--mu);font-size:12px}
-.ag .now{margin:8px 0;font-size:12.5px;min-height:36px}
 .bar{height:6px;border-radius:9px;background:var(--line);overflow:hidden}
 .bar>div{height:100%;width:0;background:linear-gradient(90deg,var(--c,var(--cy)),var(--vi));transition:width .8s ease;border-radius:9px}
 .meta{display:flex;gap:12px;margin-top:8px;color:var(--mu);font-size:11.5px;align-items:center}
@@ -217,11 +211,6 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
     <div id="tasks"></div>
   </section>
 
-  <section class="card agents">
-    <h2>Subagents <small>Live status and activity</small></h2>
-    <div class="grid" id="agents"></div>
-  </section>
-
   <section class="card org">
     <h2>Org structure <small>Click a name for details</small></h2>
     <div class="org-body">
@@ -370,9 +359,6 @@ function resolveTopoCollisions(){
 }
 /* re-run once the Sora webfont is ready, so label placement uses final glyph widths */
 if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resolveTopoCollisions);}
-function drawAgents(){
-  $("agents").innerHTML=A.map(function(a,i){return '<div class="ag '+a.s+'"><div class="top"><span class="nm">'+a.n+'</span><span class="badge">'+a.s+'</span></div><div class="role">'+a.r+'</div><div class="now">'+a.act+'</div><div class="meta mono"><span>'+a.task.id+'</span><span>'+shortTok(a.tok)+' tok</span><span>$'+(a.cost||0).toFixed(2)+'</span></div></div>'}).join("");
-}
 function drawTasks(){
   var T=S.tasks||[],byId={};T.forEach(function(t){byId[t.id]=t;});
   $("cols").innerHTML=[["Queued",S.queued],["Running",(S.running!=null?S.running:T.filter(function(t){return t.status==="running"}).length)],["Done",S.done],["Failed",S.failed]].map(function(c){return '<div class="col"><b>'+c[1]+'</b><span>'+c[0]+'</span></div>'}).join("");
@@ -567,7 +553,7 @@ document.addEventListener("click",function(e){
   if(b){e.preventDefault();orgDetail(b.dataset.agent);}
 });
 
-function drawAll(){drawTopo();drawAgents();drawOrg();drawTasks();drawKpi();drawPerf();drawTools()}
+function drawAll(){drawTopo();drawOrg();drawTasks();drawKpi();drawPerf();drawTools()}
 
 function drawAlerts(){var ks=Object.keys(AL);$("acount").textContent=ks.length?ks.length+" open":"All clear";setH("alerts",ks.length?ks.map(function(k){var x=AL[k];return '<div class="row"><span class="sev '+x.sev+'"></span><div class="tx">'+x.msg+'<small>'+x.ag+', '+x.t+'</small></div><button data-k="'+k+'">Dismiss</button></div>'}).join(""):'<div class="empty">No alerts. All agents look healthy.</div>')}
 function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Nothing pending";setH("appr",AP.length?AP.map(function(x){return '<div class="row"><span class="sev '+x.risk+'"></span><div class="tx">'+x.ag+' wants to '+x.text+'<small>'+x.risk+' risk, requested '+x.t+'</small></div><button data-d="'+x.id+'">Deny</button><button class="ok" data-a="'+x.id+'">Approve</button></div>'}).join(""):'<div class="empty">No pending requests. Risky actions pause here until you decide.</div>')}

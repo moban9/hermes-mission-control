@@ -183,7 +183,8 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   <section class="kpis" id="kpis"></section>
 
   <section class="card topo">
-    <h2>Agent network <small>Onendo orchestrator and subagents</small></h2>
+    <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Agent network <small>Onendo orchestrator and subagents</small>
+      <button id="checkStuck" type="button" title="Compare open sessions against kanban cards" style="margin-left:auto;padding:5px 10px;font:600 11px/1 system-ui;color:var(--cy);background:none;border:1px solid color-mix(in srgb,var(--cy) 45%,transparent);border-radius:8px;cursor:pointer">Check stuck</button></h2>
     <svg id="topo" viewBox="0 0 400 250" role="img" aria-label="Network of Onendo and its subagents"></svg>
   </section>
 
@@ -194,8 +195,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   </section>
 
   <section class="card agents">
-    <h2>Subagents <small>Live status and activity</small>
-      <button id="checkStuck" type="button" style="margin-left:auto;padding:5px 10px;font:600 11px/1 system-ui;color:var(--cy);background:none;border:1px solid color-mix(in srgb,var(--cy) 45%,transparent);border-radius:8px;cursor:pointer">Check stuck</button></h2>
+    <h2>Subagents <small>Live status and activity</small></h2>
     <div class="grid" id="agents"></div>
   </section>
 

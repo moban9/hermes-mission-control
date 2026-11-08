@@ -12,6 +12,11 @@ const TOKEN = FIXTURE ? 'isolated-viewer' : (process.env.MC_TOKEN || (await fs.r
 const SHOT = process.env.SHOT_PATH || '/opt/data/evidence/mc-pipeline-v1.0.2-authenticated-dom.png';
 if (!TOKEN) throw new Error('Viewer token is empty; expected MC_TOKEN or /opt/data/cache/mc_viewer_token.txt');
 let fixture = null;
+process.once('exit', () => {
+  if (fixture?.pid && fixture.exitCode === null) {
+    try { process.kill(fixture.pid, 'SIGKILL'); } catch {}
+  }
+});
 let fixtureOutput = '';
 let PAGE = process.env.MC_URL;
 if (FIXTURE) {
@@ -112,6 +117,20 @@ try {
   ];
   for (const [name, actual, expected] of checks) assertEqual(name, actual, expected);
   if (LIVE_SMOKE) {
+    const liveState = await evaluate(`fetch('/v1/state?token='+encodeURIComponent(sessionStorage.getItem('mc_viewer_token')), {cache:'no-store'}).then(r=>r.json())`);
+    const rowsByTitle = new Map(liveState.pipeline.map(p => [p.title, p]));
+    const domRows = await evaluate(`JSON.stringify([...document.querySelectorAll('.pipeline-row')].map(row => ({title:row.querySelector('.pipeline-title')?.innerText?.trim(), markers:row.querySelectorAll('.pipeline-emergent').length})))`);
+    const renderedRows = JSON.parse(domRows);
+    for (const row of renderedRows) {
+      const p = rowsByTitle.get(row.title);
+      if (!p) throw new Error(`Live DOM row missing from authenticated state: ${row.title}`);
+      // Deferred items are intentionally excluded from total by the contract.
+      if (p.rollup.done > p.rollup.total)
+        throw new Error(`Invalid rollup counts for ${row.title}: done=${p.rollup.done}, total=${p.rollup.total}`);
+      const expectedMarkers = p.milestones.slice(0, 4).filter(m => m.emergent).length;
+      if (row.markers !== expectedMarkers) throw new Error(`Emergent markers for ${row.title}: DOM=${row.markers}, state=${expectedMarkers}`);
+    }
+    console.log(`LIVE_SMOKE invariants: rows=${renderedRows.length}; rollup totals and emergent markers match authenticated /v1/state`);
     const wib = new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()) + ' WIB';
     if (!/^\d{2}:\d{2}:\d{2} WIB$/.test(result.clock || '')) throw new Error(`Invalid live WIB clock ${result.clock}`);
     const seconds = x => x.split(/[: ]/).slice(0,3).reduce((a,v)=>a*60+Number(v),0);

@@ -186,6 +186,20 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 #orgDetail.empty{color:var(--mu);font-size:12px}
 #orgDetail .k{color:var(--mu);display:inline-block;min-width:82px;margin-right:8px}
 @media(max-width:760px){.org-body{flex-direction:column;align-items:stretch}#orgChart{flex:1 1 auto;min-width:0}#orgDetail{flex:1 1 auto;min-width:0}}
+
+#taskPipelinePanel .pipeline-row{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin:8px 0;background:var(--panel)}
+#taskPipelinePanel .pipeline-row.has-blocked{border-left:3px solid var(--rd)}
+#taskPipelinePanel .pipeline-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+#taskPipelinePanel .pipeline-title{font-weight:700;color:var(--tx)}
+#taskPipelinePanel .pipeline-chip,#taskPipelinePanel .pipeline-pill{font-size:11px;padding:2px 7px;border-radius:12px;background:var(--bg2);color:var(--mu)}
+#taskPipelinePanel .pipeline-pill.queued{color:var(--am)} #taskPipelinePanel .pipeline-pill.running{color:var(--cy)} #taskPipelinePanel .pipeline-pill.blocked{color:var(--rd)} #taskPipelinePanel .pipeline-pill.review{color:var(--vi)} #taskPipelinePanel .pipeline-pill.done{color:var(--gr)}
+#taskPipelinePanel .pipeline-progress{height:4px;background:var(--bg2);margin-top:8px;border-radius:4px;overflow:hidden}
+#taskPipelinePanel .pipeline-progress>i{display:block;height:100%;background:var(--gr)}
+#taskPipelinePanel .pipeline-child{display:flex;gap:7px;align-items:baseline;margin:6px 0 0 14px;font-size:12px;flex-wrap:wrap}
+#taskPipelinePanel .pipeline-dot{color:var(--mu)} #taskPipelinePanel .pipeline-dot.queued{color:var(--am)} #taskPipelinePanel .pipeline-dot.review{color:var(--vi)} #taskPipelinePanel .pipeline-dot.blocked{color:var(--rd)} #taskPipelinePanel .pipeline-dot.running{color:var(--cy)} #taskPipelinePanel .pipeline-dot.done{color:var(--gr)}
+#taskPipelinePanel .pipeline-time{color:var(--mu);font-size:11px}
+#taskPipelinePanel button.pipeline-more{margin:8px 0 0 14px}
+
 </style>
 </head>
 <body>
@@ -218,6 +232,8 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
       <div id="orgDetail" class="empty">Select an agent to see model, spend, session and recent work.</div>
     </div>
   </section>
+
+  <section class="card n12" id="taskPipelinePanel"><h2>Task pipeline</h2><div id="taskPipelineBody"></div></section>
 
   <section class="card logs" id="logsCard">
     <h2 id="logsHead" title="Click to collapse or expand" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)">
@@ -789,10 +805,19 @@ function renderLog(events){
   L.scrollTop=L.scrollHeight;
 }
 function ageAgo(s){if(s==null||!isFinite(s))return "";s=+s;if(s<60)return "just now";if(s<3600)return Math.round(s/60)+"m ago";if(s<86400)return Math.round(s/3600)+"h ago";if(s<604800)return Math.round(s/86400)+"d ago";return Math.round(s/604800)+"w ago"}
-function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
+function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();renderPipeline(state);if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
 function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Onendo","error","Approval decision failed: "+err.message);refreshState();})}
 function sendCommand(agent,action){fetch("/v1/agents/"+encodeURIComponent(agent)+"/command"+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({action:action})}).then(function(r){if(r.status===401){rejectAuth("Token rejected.");return null;}return r.json().then(function(j){return {ok:r.ok,status:r.status,body:j};}).catch(function(){return {ok:r.ok,status:r.status,body:null};});}).then(function(res){if(!res)return;if(res.ok){log(agent,"info","Command "+action+" accepted");refreshState();}else{var d=(res.body&&res.body.detail)||("Command "+action+" failed (http "+res.status+")");log(agent,"error",d);}}).catch(function(err){log(agent,"error","Command failed: "+err.message);})}
+var pipelineExpanded={};
+function pipelineEscape(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function pipelineLabelClass(status){return ({triage:"queued",todo:"queued",ready:"queued",scheduled:"queued",running:"running",blocked:"blocked",review:"review",done:"done",archived:""})[status]||""}
+function pipelineWib(ts){return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Jakarta",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).format(new Date(ts*1000))+" WIB"}
+function pipelineElapsed(ts){var n=Math.max(0,Math.floor(Date.now()/1000)-ts),h=Math.floor(n/3600),m=Math.floor(n%3600/60),s=n%60;return h+"h "+m+"m "+s+"s"}
+function pipelineIsExpanded(id){if(Object.prototype.hasOwnProperty.call(pipelineExpanded,id))return pipelineExpanded[id];try{return sessionStorage.getItem("mc.pipeline.expanded."+id)==="1"}catch(e){return false}}
+function pipelineSetExpanded(id,on){pipelineExpanded[id]=on;try{sessionStorage.setItem("mc.pipeline.expanded."+id,on?"1":"0")}catch(e){}}
+function renderPipeline(state){var body=$("taskPipelineBody");if(!body)return;if(!state||state.pipeline_available!==true){body.textContent="board unavailable";return}var rows=state.pipeline||[];if(!rows.length){body.textContent="No decomposed tasks in flight.";return}body.innerHTML=rows.map(function(p){var ms=p.milestones||[],expanded=pipelineIsExpanded(p.task_id),visible=expanded?ms:ms.slice(0,4),blocked=(p.rollup&&p.rollup.blocked)||0;var children=visible.map(function(m){var st=m.status||"",extra=st==="running"?(m.started_at>0?"Started "+pipelineWib(m.started_at)+" · elapsed "+pipelineElapsed(m.started_at):"Started unavailable"):"";return '<div class="pipeline-child"><span class="pipeline-dot '+pipelineLabelClass(st)+'">●</span><span>'+pipelineEscape(m.status_label||st)+'</span><span>'+pipelineEscape(m.title)+'</span><span class="pipeline-chip">'+pipelineEscape(m.assignee||"Unassigned")+'</span>'+(extra?'<span class="pipeline-time">'+pipelineEscape(extra)+'</span>':"")+'</div>'}).join("");var button=ms.length>4?'<button type="button" class="pipeline-more" data-pipeline-id="'+pipelineEscape(p.task_id)+'">'+(expanded?"Show less":"+"+(ms.length-4)+" more")+'</button>':"";var status=p.status||"";return '<div class="pipeline-row '+(blocked?"has-blocked":"")+'"><div class="pipeline-head"><span class="pipeline-title">'+pipelineEscape(p.title)+'</span><span class="pipeline-chip">'+pipelineEscape(p.lead||"Unassigned")+'</span><span class="pipeline-pill '+pipelineLabelClass(status)+'">'+pipelineEscape(p.status_label||status)+'</span><span>'+((p.rollup&&p.rollup.done)||0)+"/"+((p.rollup&&p.rollup.total)||0)+" · "+((p.rollup&&p.rollup.pct)||0)+'%</span>'+(blocked?'<b style="color:var(--rd)">Blocked '+blocked+'</b>':"")+'</div><div class="pipeline-progress"><i style="width:'+Math.max(0,Math.min(100,(p.rollup&&p.rollup.pct)||0))+'%"></i></div>'+children+button+'</div>'}).join("");body.querySelectorAll(".pipeline-more").forEach(function(b){b.onclick=function(){var id=b.getAttribute("data-pipeline-id");pipelineSetExpanded(id,!pipelineIsExpanded(id));renderPipeline(state)}})}
 function mapState(state){
+  renderPipeline(state);
   A=(state.agents||[]).map(mapAgent);
   var k=state.kpis||{};
   S.done=k.tasks_done||0;S.queued=k.tasks_queued||0;S.failed=k.tasks_failed||0;S.running=k.tasks_running||0;
@@ -879,6 +904,7 @@ function ensureSSE(){
 function onSSE(e){
   try{var state=JSON.parse(e.data);}catch(err){return;}
   lastEventAt=Date.now();
+  renderPipeline(state);
   if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}
   showEmpty(false);
   mapState(state);
@@ -895,6 +921,7 @@ async function connect(){
     if(!r.ok)throw new Error("http "+r.status);
     var state=await r.json();
     lastEventAt=Date.now();
+    renderPipeline(state);
     if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}
     showEmpty(false);
     mapState(state);

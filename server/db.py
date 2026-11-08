@@ -57,7 +57,7 @@ def profiles() -> list[tuple[str, str]]:
     return out
 
 
-def open_ro(path: str) -> sqlite3.Connection:
+def open_ro(path: str, timeout: float = 5.0) -> sqlite3.Connection:
     """Open a Hermes/kanban SQLite file strictly read-only.
 
     ``mode=ro`` makes SQLite refuse writes at the engine level; ``query_only``
@@ -65,7 +65,7 @@ def open_ro(path: str) -> sqlite3.Connection:
     whose queries return nothing rather than raising, so the dashboard stays up
     even if one profile db is absent.
     """
-    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=timeout)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA query_only = ON")
     return con

@@ -23,6 +23,7 @@ import alerts
 import live as live_mod
 import memory as memory_mod
 import settings
+import pipeline as pipeline_mod
 
 # How many recent events to surface in /v1/state.
 EVENT_LIMIT = int(os.environ.get("MC_EVENT_LIMIT", "300"))
@@ -195,7 +196,11 @@ def reduce_agent(name: str, path: str, now: float) -> dict:
 
 def reduce_tasks() -> tuple[list[dict], dict]:
     """Return (task list, task KPI counters) from kanban.db."""
-    con = db.open_ro(db.KANBAN_DB)
+    empty_kpi = {"tasks_total": 0, "tasks_queued": 0, "tasks_running": 0, "tasks_done": 0, "tasks_blocked": 0, "tasks_failed": 0}
+    try:
+        con = db.open_ro(db.KANBAN_DB, timeout=0.2)
+    except Exception:
+        return [], empty_kpi
     try:
         rows = con.execute(
             """
@@ -207,6 +212,8 @@ def reduce_tasks() -> tuple[list[dict], dict]:
             FROM tasks ORDER BY created_at DESC
             """
         ).fetchall()
+    except Exception:
+        return [], empty_kpi
     finally:
         con.close()
 
@@ -430,7 +437,10 @@ def reduce_failure_events(now: float, window_s: float | None = None) -> list[dic
     """Task-failure events from kanban.db within the burst window."""
     window_s = window_s if window_s is not None else alerts.ERROR_BURST_WINDOW_S
     cutoff = now - window_s
-    con = db.open_ro(db.KANBAN_DB)
+    try:
+        con = db.open_ro(db.KANBAN_DB, timeout=0.2)
+    except Exception:
+        return []
     try:
         q = ",".join("?" * len(alerts.FAILURE_EVENT_KINDS))
         rows = con.execute(
@@ -442,6 +452,8 @@ def reduce_failure_events(now: float, window_s: float | None = None) -> list[dic
             """,
             (*alerts.FAILURE_EVENT_KINDS, cutoff),
         ).fetchall()
+    except Exception:
+        return []
     finally:
         con.close()
     return [
@@ -523,6 +535,7 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
             agent["recent_tool_calls"] = list(la.get("recent_tool_calls") or [])
 
     tasks, task_kpi = reduce_tasks()
+    pipeline_state = pipeline_mod.read_pipelines(now=now)
     events = reduce_events(now)
     tool_counts = reduce_tool_counts()
     usage = reduce_usage()
@@ -595,6 +608,7 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
         "approvals": approvals,
         "kpis": kpis,
         "tasks": tasks,
+        **pipeline_state,
         "events": events,
         "tool_counts": tool_counts,
         "throughput": usage,

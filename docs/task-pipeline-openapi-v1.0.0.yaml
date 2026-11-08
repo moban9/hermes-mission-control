@@ -1,0 +1,86 @@
+openapi: 3.1.0
+info:
+  title: Mission Control pipeline additive contract fragment
+  version: 1.0.0
+  description: Merge into existing state contract; retain existing auth and all other fields.
+paths:
+  /v1/state:
+    get:
+      operationId: getState
+      description: Existing viewer authorization remains unchanged. Board failure does not fail this route.
+      responses:
+        '200':
+          description: Existing state plus pipeline fields; includes board-unavailable responses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineStateExtension'
+components:
+  schemas:
+    PipelineStateExtension:
+      type: object
+      additionalProperties: true
+      required: [pipeline, pipeline_available, pipeline_error]
+      properties:
+        pipeline:
+          type: array
+          items: {$ref: '#/components/schemas/Pipeline'}
+        pipeline_available: {type: boolean}
+        pipeline_error:
+          enum: [null, board unavailable]
+      allOf:
+        - if:
+            properties:
+              pipeline_available: {const: false}
+          then:
+            properties:
+              pipeline: {maxItems: 0}
+              pipeline_error: {const: board unavailable}
+          else:
+            properties:
+              pipeline_error: {type: 'null'}
+    Epoch:
+      type: integer
+      minimum: 0
+      description: Epoch seconds; missing nullable storage timestamp becomes 0. UI absolute times use WIB.
+    Pipeline:
+      type: object
+      additionalProperties: false
+      required: [task_id, title, lead, status, status_label, priority, created_at, rollup, milestones]
+      properties:
+        task_id: {type: string}
+        title: {type: string}
+        lead: {type: [string, 'null']}
+        status: {type: string}
+        status_label: {type: string}
+        priority: {type: integer}
+        created_at: {$ref: '#/components/schemas/Epoch'}
+        rollup: {$ref: '#/components/schemas/Rollup'}
+        milestones:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/Milestone'}
+    Rollup:
+      type: object
+      additionalProperties: false
+      required: [total, done, running, blocked, deferred, pct]
+      properties:
+        total: {type: integer, minimum: 0}
+        done: {type: integer, minimum: 0}
+        running: {type: integer, minimum: 0}
+        blocked: {type: integer, minimum: 0}
+        deferred: {type: integer, minimum: 0}
+        pct: {type: integer, minimum: 0, maximum: 100}
+    Milestone:
+      type: object
+      additionalProperties: false
+      required: [id, title, assignee, status, status_label, started_at, completed_at, blocked_kind]
+      properties:
+        id: {type: string}
+        title: {type: string}
+        assignee: {type: [string, 'null']}
+        status: {type: string}
+        status_label: {type: string}
+        started_at: {$ref: '#/components/schemas/Epoch'}
+        completed_at: {$ref: '#/components/schemas/Epoch'}
+        blocked_kind: {type: [string, 'null']}

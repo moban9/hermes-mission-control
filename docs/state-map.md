@@ -54,3 +54,7 @@ read-only view proves insufficient.
 - Read-only access to state.db (`file:<path>?mode=ro`).
 - Viewer token for the dashboard; a separate read-only token for guests.
 - No writes back into Hermes. Dashboard outage cannot break an agent run.
+
+## Additive task pipeline read model (v1.0.0)
+
+`/v1/state` also exposes `pipeline`, `pipeline_available`, and `pipeline_error`, read-only from `kanban.db` tasks/task_links. Each parent with direct linked children is one pipeline; rollups include direct children only (multi-parent children count per parent). Archived milestones remain visible but are excluded from total. The `completed_at` terminal retention timestamp is a proxy because storage has no `archived_at`; see [task-pipeline-v1.0.0.md](task-pipeline-v1.0.0.md) for exact filtering, ordering, JSON keys, failure isolation, and WIB display contract.

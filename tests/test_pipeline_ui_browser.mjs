@@ -1,13 +1,40 @@
 // Real Chrome/CDP acceptance harness for the authenticated Mission Control pipeline UI.
 // Run: MC_TOKEN="$(cat /opt/data/cache/mc_viewer_token.txt)" node tests/test_pipeline_ui_browser.mjs
-// Optional: MC_URL, CDP_URL, SHOT_PATH. No npm packages are required (Node 26 WebSocket).
+// Optional: MC_URL, CDP_URL, SHOT_PATH, LIVE_SMOKE=1. No npm packages required.
 import fs from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import readline from 'node:readline';
 
 const CDP = process.env.CDP_URL || 'http://127.0.0.1:9222';
-const PAGE = process.env.MC_URL || 'https://mission.onendo.cloud/';
-const TOKEN = process.env.MC_TOKEN || (await fs.readFile('/opt/data/cache/mc_viewer_token.txt', 'utf8')).trim();
+const LIVE_SMOKE = process.env.LIVE_SMOKE === '1';
+const FIXTURE = !LIVE_SMOKE;
+const TOKEN = FIXTURE ? 'isolated-viewer' : (process.env.MC_TOKEN || (await fs.readFile('/opt/data/cache/mc_viewer_token.txt', 'utf8')).trim());
 const SHOT = process.env.SHOT_PATH || '/opt/data/evidence/mc-pipeline-v1.0.2-authenticated-dom.png';
 if (!TOKEN) throw new Error('Viewer token is empty; expected MC_TOKEN or /opt/data/cache/mc_viewer_token.txt');
+let fixture = null;
+let fixtureOutput = '';
+let PAGE = process.env.MC_URL;
+if (FIXTURE) {
+  fixture = spawn('/opt/hermes/.venv/bin/python', ['tests/pipeline_ui_fixture_server.py'], { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] });
+  fixture.stderr.on('data', b => { fixtureOutput += b.toString(); });
+  const line = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(`Fixture startup timeout; stderr/stdout: ${fixtureOutput}`)), 15000);
+    fixture.once('error', e => { clearTimeout(timeout); reject(e); });
+    fixture.once('exit', code => { clearTimeout(timeout); reject(new Error(`Fixture exited ${code}; ${fixtureOutput}`)); });
+    readline.createInterface({ input: fixture.stdout }).once('line', value => { clearTimeout(timeout); resolve(value); });
+  });
+  const port = Number(line.match(/PORT=(\d+)/)?.[1]);
+  if (!port) throw new Error(`Fixture startup output missing port: ${line}; ${fixtureOutput}`);
+  PAGE = `http://127.0.0.1:${port}/`;
+  let ready = false;
+  for (let i = 0; i < 60; i++) {
+    if (fixture.exitCode !== null) throw new Error(`Fixture startup failed: ${fixtureOutput}`);
+    try { ready = (await fetch(`${PAGE}healthz`)).ok; } catch {}
+    if (ready) break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  if (!ready) throw new Error(`Fixture health check failed at ${PAGE}healthz; ${fixtureOutput}`);
+} else PAGE ||= 'https://mission.onendo.cloud/';
 
 const target = await (await fetch(`${CDP}/json/new/about:blank`, { method: 'PUT' })).json();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
@@ -58,7 +85,7 @@ try {
 
   const snapshot = await evaluate(`JSON.stringify({
     rows: document.querySelectorAll('.pipeline-row').length,
-    children: document.querySelectorAll('.pipeline-child').length,
+    children: document.querySelector('.pipeline-row')?.querySelectorAll('.pipeline-child').length ?? 0,
     emergent: document.querySelectorAll('.pipeline-emergent').length,
     subtitle: document.querySelector('.pipeline-subtitle')?.innerText?.trim() ?? null,
     omitted: document.querySelector('.pipeline-omitted')?.innerText?.trim() ?? null,
@@ -68,14 +95,29 @@ try {
   const result = JSON.parse(snapshot);
   const domPath = '/tmp/mc-pipeline-v1.0.2-authenticated-dom.html';
   await fs.writeFile(domPath, result.dom, 'utf8');
-  const checks = [
-    ['.pipeline-row count', result.rows, 4],
-    ['.pipeline-child count', result.children, 10],
-    ['.pipeline-emergent count', result.emergent, 4],
-    ['.pipeline-subtitle text', result.subtitle, 'planned 1 / added 1'],
-    ['.pipeline-omitted text', result.omitted, '+7 older pipelines hidden'],
+  const checks = LIVE_SMOKE ? [
+    ['pipeline rows present', result.rows > 0, true],
+    ['pipeline children present', result.children > 0, true],
+    ['board unavailable absent', result.dom.includes('board unavailable'), false],
+    ['omitted count markup consistency', result.omitted === null || /^\+\d+ older pipelines hidden$/.test(result.omitted), true],
+  ] : [
+    ['fixture subtitle', result.dom.includes('planned 1 / added 1'), true],
+    ['emergent classification label', result.dom.includes('⚑ added mid-flight'), true],
+    ['shared parent note', result.dom.includes('also under 1'), true],
+    ['fixture root rendered', result.dom.includes('UI fixture root'), true],
+    ['four-child collapse', result.children, 4],
+    ['four-child expand affordance', result.dom.includes('pipeline-more') && result.dom.includes('more'), true],
+    ['completed cap omitted count', result.omitted, '+3 older pipelines hidden'],
+    ['board available', result.dom.includes('board unavailable'), false],
   ];
   for (const [name, actual, expected] of checks) assertEqual(name, actual, expected);
+  if (LIVE_SMOKE) {
+    const wib = new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date()) + ' WIB';
+    if (!/^\d{2}:\d{2}:\d{2} WIB$/.test(result.clock || '')) throw new Error(`Invalid live WIB clock ${result.clock}`);
+    const seconds = x => x.split(/[: ]/).slice(0,3).reduce((a,v)=>a*60+Number(v),0);
+    const delta = Math.abs(seconds(result.clock) - seconds(wib));
+    if (Math.min(delta, 86400-delta) > 60) throw new Error(`Live clock differs from Asia/Jakarta by ${delta}s`);
+  }
   if (!/^\d{2}:\d{2}:\d{2} WIB$/.test(result.clock || ''))
     throw new Error(`#clock must be HH:MM:SS WIB; got ${JSON.stringify(result.clock)}`);
 
@@ -92,4 +134,9 @@ try {
   throw error;
 } finally {
   ws.close();
+  if (fixture && fixture.exitCode === null) {
+    fixture.kill('SIGTERM');
+    const stopped = await Promise.race([new Promise(resolve => fixture.once('exit', resolve)), new Promise(resolve => setTimeout(() => resolve(false), 2000))]);
+    if (stopped === false) fixture.kill('SIGKILL');
+  }
 }

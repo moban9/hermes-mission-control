@@ -4,7 +4,7 @@ Usage: python tests/pipeline_ui_fixture_server.py [port]. Stop with Ctrl-C.
 The endpoint, auth middleware, reducer and page are production code; only input
 board rows and all non-board source paths are isolated.
 """
-import os, sqlite3, sys, tempfile, time
+import os, socket, sqlite3, sys, tempfile
 from pathlib import Path
 
 ROOT = Path(tempfile.mkdtemp(prefix="mc-ui-acceptance-"))
@@ -15,21 +15,22 @@ CREATE TABLE tasks(id TEXT PRIMARY KEY,title TEXT,assignee TEXT,status TEXT,prio
 CREATE TABLE task_links(parent_id TEXT,child_id TEXT);
 CREATE TABLE task_events(id INTEGER PRIMARY KEY,task_id TEXT,kind TEXT,created_at REAL,payload TEXT);
 """)
-now = int(time.time())
-rows = [("ui-root", "UI fixture root", "keystone", "running", 4, now-300, now-250, 0, None, 0, "isolated"),
-        ("ui-second", "Second root", "meridian", "running", 0, now-500, now-450, 0, None, 0, "isolated"),
-        ("ui-shared", "Shared fixture card", "relay", "todo", 0, now-20, 0, 0, None, 0, "isolated"),
-        ("ui-second-own", "Second exclusive", "relay", "todo", 0, now-30, 0, 0, None, 0, "isolated")]
-for i in range(7):
-    status = "running" if i in (0, 6) else ("blocked" if i == 1 else "todo")
-    started = now-90 if i == 0 else 0
-    rows.append((f"ui-child-{i}", "Hostile <img src=x onerror=alert(1)>" if i == 2 else f"UI child {i}", "piston", status, 0, now-100+i*10, started, 0, None, 0, "isolated"))
-for i in range(5):
-    rows.extend([(f"ui-done-{i}", f"Completed {i}", "atlas", "done", 0, now-1000+i, 0, now-100+i, None, 0, "isolated"),
-                 (f"ui-done-child-{i}", f"Archived {i}", "atlas", "archived", 0, now-900+i, 0, now-100+i, None, 0, "isolated")])
+# Fixed epoch values make graph classification and display deterministic.
+rows = [("ui-root", "UI fixture root", "keystone", "running", 4, 100, 200, 0, None, 0, "isolated"),
+        ("ui-second", "Second root", "meridian", "running", 0, 110, 210, 0, None, 0, "isolated"),
+        ("ui-child", "Planned child", "relay", "todo", 0, 120, 0, 0, None, 0, "isolated"),
+        ("ui-grandchild", "Grandchild", "piston", "archived", 0, 220, 0, 0, None, 0, "isolated"),
+        ("ui-late-1", "Late one", "piston", "todo", 0, 201, 0, 0, None, 0, "isolated"),
+        ("ui-late-2", "Late two", "piston", "archived", 0, 230, 0, 0, None, 0, "isolated"),
+        ("ui-shared", "Shared fixture card", "relay", "archived", 0, 202, 0, 0, None, 0, "isolated")]
+for i in range(6):
+    rows.append((f"ui-done-{i}", f"Completed {i}", "atlas", "done", 0, 300+i, 0, 400+i, None, 0, "isolated"))
+    rows.append((f"ui-done-child-{i}", f"Completed milestone {i}", "atlas", "done", 0, 310+i, 0, 410+i, None, 0, "isolated"))
 con.executemany("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?)", rows)
-links = [("ui-root", f"ui-child-{i}") for i in range(7)] + [("ui-root", "ui-shared"), ("ui-second", "ui-shared"), ("ui-second", "ui-second-own")]
-links += [(f"ui-done-{i}", f"ui-done-child-{i}") for i in range(5)]
+links = [("ui-root", "ui-child"), ("ui-child", "ui-grandchild"),
+         ("ui-root", "ui-late-1"), ("ui-root", "ui-late-2"),
+         ("ui-root", "ui-shared"), ("ui-second", "ui-shared")]
+links += [(f"ui-done-{i}", f"ui-done-child-{i}") for i in range(6)]
 con.executemany("INSERT INTO task_links VALUES(?,?)", links)
 con.commit(); con.close()
 os.environ.update({
@@ -45,6 +46,12 @@ app.db.BOT_NAMES = []
 app.db.profiles = lambda: []
 app.reducer.db.BOT_NAMES = []
 app.reducer.db.profiles = lambda: []
-port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind(("127.0.0.1", 0))
+sock.listen(128)
+sock.setblocking(False)
+port = sock.getsockname()[1]
 print(f"ISOLATED_BOARD={board} PORT={port} TOKEN=isolated-viewer", flush=True)
-uvicorn.run(app.app, host="0.0.0.0", port=port, log_level="warning", lifespan="off")
+server = uvicorn.Server(uvicorn.Config(app.app, host="127.0.0.1", port=port, log_level="warning", lifespan="off"))
+server.run(sockets=[sock])

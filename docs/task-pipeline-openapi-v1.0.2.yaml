@@ -1,0 +1,70 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mission Control pipeline additive contract fragment",
+    "version": "1.0.2",
+    "description": "JSON syntax is valid YAML. Merge into existing state contract; auth and unrelated state unchanged. v1.0.2: three-completed cap replaces seven-day retention; transitive exclusive root grouping; server-computed emergent flag. Normative graph, selection and display rules: task-pipeline-v1.0.2.md."
+  },
+  "paths": {"/v1/state": {"get": {
+    "operationId": "getState",
+    "description": "Existing viewer authorization unchanged; board failure does not fail route.",
+    "responses": {"200": {"description": "Existing state plus pipeline fields, including board-unavailable responses.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PipelineStateExtension"}}}}}
+  }}},
+  "components": {"schemas": {
+    "PipelineStateExtension": {
+      "type": "object", "additionalProperties": true,
+      "required": ["pipeline", "pipeline_available", "pipeline_error", "pipelines_omitted"],
+      "description": "Exact keys; available and status_display aliases forbidden. Additional properties retain unrelated existing state.",
+      "properties": {
+        "pipeline": {"type": "array", "items": {"$ref": "#/components/schemas/Pipeline"}, "description": "Every active root pipeline plus three completed selected by completed_at DESC, created_at/task_id ASC. No age prefilter. Final display order unchanged: blocked/running/priority DESC then created_at/task_id ASC."},
+        "pipeline_available": {"type": "boolean"},
+        "pipeline_error": {"enum": [null, "board unavailable"]},
+        "pipelines_omitted": {"type": "integer", "minimum": 0, "description": "Completed candidates beyond cap, never active/standalone/zero-assignment roots. Zero on failure/empty."}
+      },
+      "allOf": [{"if": {"properties": {"pipeline_available": {"const": false}}}, "then": {"properties": {"pipeline": {"maxItems": 0}, "pipeline_error": {"const": "board unavailable"}, "pipelines_omitted": {"const": 0}}}, "else": {"properties": {"pipeline_error": {"type": "null"}}}}]
+    },
+    "Epoch": {"type": "integer", "minimum": 0, "description": "Epoch seconds; nullable storage timestamps become 0. UI absolute times use WIB, Asia/Jakarta."},
+    "Pipeline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["task_id", "title", "lead", "status", "status_label", "priority", "created_at", "rollup", "milestones", "completed_at"],
+      "description": "Top-most root with >=1 assigned descendant. Exclusive owner=min(root.created_at,root.id); one milestone globally per task id. Raw root status is not rollup status.",
+      "properties": {
+        "task_id": {"type": "string"}, "title": {"type": "string"}, "lead": {"type": ["string", "null"]},
+        "status": {"type": "string"}, "status_label": {"type": "string", "description": "Server mapping Queued/Running/Blocked/In review/Done/Deferred; raw fallback for unknown. No status_display alias."},
+        "priority": {"type": "integer"}, "created_at": {"$ref": "#/components/schemas/Epoch"},
+        "completed_at": {"$ref": "#/components/schemas/Epoch", "description": "Maximum stored completed_at of root plus all assigned descendants, null=0. Computed even while active, no fabricated archive timestamp. Active iff root or any assigned descendant outside done/archived."},
+        "rollup": {"$ref": "#/components/schemas/Rollup"},
+        "milestones": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/Milestone"}, "description": "Assigned unique descendants at any depth, including archived. Blocked first then created_at ASC/id ASC; roots excluded. Dedupe by task ID across paths."}
+      }
+    },
+    "Rollup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["total", "done", "running", "blocked", "deferred", "pct", "planned", "emergent"],
+      "description": "All assigned descendants before collapse; archived excluded from total/planned/emergent, counted in deferred. planned+emergent=total; pct=floor(100*done/max(total,1)).",
+      "properties": {
+        "total": {"type": "integer", "minimum": 0}, "done": {"type": "integer", "minimum": 0},
+        "running": {"type": "integer", "minimum": 0}, "blocked": {"type": "integer", "minimum": 0},
+        "deferred": {"type": "integer", "minimum": 0}, "pct": {"type": "integer", "minimum": 0, "maximum": 100},
+        "planned": {"type": "integer", "minimum": 0}, "emergent": {"type": "integer", "minimum": 0}
+      }
+    },
+    "Milestone": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "assignee", "status", "status_label", "started_at", "completed_at", "blocked_kind", "emergent", "origin_label", "also_under", "also_under_note"],
+      "properties": {
+        "id": {"type": "string"}, "title": {"type": "string"}, "assignee": {"type": ["string", "null"]},
+        "status": {"type": "string"}, "status_label": {"type": "string"},
+        "started_at": {"$ref": "#/components/schemas/Epoch"}, "completed_at": {"$ref": "#/components/schemas/Epoch"},
+        "blocked_kind": {"type": ["string", "null"]},
+        "emergent": {"type": "boolean", "description": "Server computed: milestone.created_at > root.started_at when source root.started_at IS NOT NULL (zero is non-null); else > earliest assigned milestone.created_at+60. Earliest includes archived, before display sorting. Strict equality is planned."},
+        "origin_label": {"enum": [null, "added mid-flight"]},
+        "also_under": {"type": "integer", "minimum": 0, "description": "Number of distinct reachable roots other than selected owner, not number of paths. Includes roots not displayed."},
+        "also_under_note": {"type": ["string", "null"], "pattern": "^also under [1-9][0-9]*$", "description": "Exact also under N when also_under>0, else null; N decimal count."}
+      },
+      "allOf": [
+        {"if": {"properties": {"emergent": {"const": true}}}, "then": {"properties": {"origin_label": {"const": "added mid-flight"}}}, "else": {"properties": {"origin_label": {"type": "null"}}}},
+        {"if": {"properties": {"also_under": {"const": 0}}}, "then": {"properties": {"also_under_note": {"type": "null"}}}, "else": {"properties": {"also_under_note": {"type": "string"}}}}
+      ]
+    }
+  }}
+}

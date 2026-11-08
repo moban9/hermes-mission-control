@@ -27,7 +27,7 @@ Columns used: `session_id, model, billing_provider, api_call_count, input_tokens
 output_tokens, cache_read_tokens, estimated_cost_usd, first_seen, last_seen`
 
 ### `kanban.db` (separate, `/opt/data/kanban.db`)
-Drives the task pipeline (queued/running/done/failed + per-task progress).
+Drives the task pipeline through a read-only, transitive root projection. Current contract: `task-pipeline-v1.0.2.md`; older versioned documents remain historical. Shared descendants are attributed once to the earliest root and annotated with `also_under`; emergent milestones are server-classified. All active pipelines plus the three most recently completed are returned; `pipelines_omitted` counts completed rows beyond that cap. `completed_at` is the maximum stored completion timestamp, never a fabricated archive time.
 
 ## Panel → source mapping
 

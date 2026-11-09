@@ -1,0 +1,299 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MC KPI drill-down additive contract",
+    "version": "1.0.0",
+    "description": "Additions only; existing /v1/state fields and authentication remain. Category rows/counts/aliases MUST derive from one board snapshot. See versioned Markdown for invariants."
+  },
+  "paths": {
+    "/v1/state": {
+      "get": {
+        "operationId": "getState",
+        "summary": "Existing authenticated state with additive read-only task filters",
+        "responses": {
+          "200": {
+            "description": "Full existing state plus additions; board projection failure is local, honest nullable counts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateAdditions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Existing authentication rejection unchanged"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TaskRow": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "title",
+          "assignee",
+          "profile",
+          "task_status",
+          "latest_run_id",
+          "outcome",
+          "attempts",
+          "outcome_attempts",
+          "ended_at",
+          "started_at",
+          "completed_at",
+          "timestamp",
+          "error",
+          "blocked_kind",
+          "block_reason",
+          "current_step"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "task_status": {
+            "type": "string"
+          },
+          "latest_run_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outcome_attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ended_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "started_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "completed_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "timestamp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blocked_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "block_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current_step": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Category": {
+        "type": "object",
+        "required": [
+          "rows",
+          "count",
+          "total",
+          "omitted"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/TaskRow"
+            }
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 20
+          },
+          "total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "omitted": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "TaskFilters": {
+        "type": "object",
+        "required": [
+          "version",
+          "available",
+          "error",
+          "generated_at",
+          "scope",
+          "limit",
+          "categories",
+          "success_rate_pct"
+        ],
+        "properties": {
+          "version": {
+            "const": "1.0.0"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "generated_at": {
+            "type": "number"
+          },
+          "scope": {
+            "const": "current_board_all_history"
+          },
+          "limit": {
+            "const": 20
+          },
+          "categories": {
+            "type": "object",
+            "required": [
+              "running",
+              "done",
+              "failed",
+              "blocked"
+            ],
+            "properties": {
+              "running": {
+                "$ref": "#/components/schemas/Category"
+              },
+              "done": {
+                "$ref": "#/components/schemas/Category"
+              },
+              "failed": {
+                "$ref": "#/components/schemas/Category"
+              },
+              "blocked": {
+                "$ref": "#/components/schemas/Category"
+              }
+            },
+            "additionalProperties": false
+          },
+          "success_rate_pct": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "StateAdditions": {
+        "type": "object",
+        "required": [
+          "task_filters",
+          "failures",
+          "failures_omitted",
+          "failures_error"
+        ],
+        "properties": {
+          "task_filters": {
+            "$ref": "#/components/schemas/TaskFilters"
+          },
+          "failures": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/TaskRow"
+            }
+          },
+          "failures_omitted": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "failures_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

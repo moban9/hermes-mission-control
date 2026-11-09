@@ -1,0 +1,142 @@
+{
+  "task": {
+    "id": "t_508a98ba",
+    "title": "Implement bounded MC approval hook v1.0.0 and demonstrate outage/read-only/grant/deny evidence",
+    "status": "archived",
+    "assignee": "keystone",
+    "block_kind": "transient",
+    "current_step_key": null
+  },
+  "runs": [
+    {
+      "id": 189,
+      "profile": "keystone",
+      "outcome": "crashed",
+      "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review — protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'tion probe and all attempted board transitions—comment, request changes, and block—failed with: > `pre_tool_call plugin callback timed out or is still running` **Operator recovery of the loaded hook is required to continue and persist the verdict.** No implementation files were edited, profile copies synchronized, or gateways restarted. The candidate remains on disk only, not operationally closed.'",
+      "summary": null,
+      "started_at": 1794200321,
+      "ended_at": 1794200525,
+      "ended_at_wib": "2026-11-09T12:02:05+07:00"
+    },
+    {
+      "id": 188,
+      "profile": "keystone",
+      "outcome": "crashed",
+      "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review — protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'probe, review comment, request-changes transition, and blocker transition all failed with: > `pre_tool_call plugin callback timed out or is still running` **Operator recovery of the loaded hook is required.** I could not persist the review verdict. No implementation files were edited, profile copies synchronized, or gateways restarted; this candidate remains on disk only, not operationally closed.'",
+      "summary": null,
+      "started_at": 1794200130,
+      "ended_at": 1794200321,
+      "ended_at_wib": "2026-11-09T11:58:41+07:00"
+    },
+    {
+      "id": 186,
+      "profile": "keystone",
+      "outcome": "crashed",
+      "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review — protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'an_comment`, `kanban_request_changes`, and `kanban_block`—all failed with: > `pre_tool_call plugin callback timed out or is still running` **Operator recovery of the loaded hook is required before review can continue or its verdict can be persisted.** No implementation files were edited, profile copies synchronized, or gateways restarted. This remains an on-disk candidate, not operational closure.'",
+      "summary": null,
+      "started_at": 1794199942,
+      "ended_at": 1794200130,
+      "ended_at_wib": "2026-11-09T11:55:30+07:00"
+    },
+    {
+      "id": 185,
+      "profile": "piston",
+      "outcome": "review_requested",
+      "error": null,
+      "summary": "Committed focused fixes as 8928eeff6fb05fa966a9549449a6e0c974978bcb. Six stdlib tests pass, including late-approved transport rejected at the outer deadline with LAST_ERROR=timeout; fail-closed classifier rejects substitutions, literal newlines, shell operators, mutation options, and unknown verbs; diff check passes. Updated the compatibility wording. Deferred live isolated-MC grant/explicit-denial/recovery and fuller acceptance evidence remain explicitly unproven; on-disk only, no profile synchronization/reload.",
+      "started_at": 1794199751,
+      "ended_at": 1794199889,
+      "ended_at_wib": "2026-11-09T11:51:29+07:00"
+    },
+    {
+      "id": 182,
+      "profile": "piston",
+      "outcome": "crashed",
+      "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review — protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'rtial on-disk changes to tighten the read-only classifier and fix `LAST_ERROR` scoping. Before that interception, the existing five-test suite passed, but it does **not** verify these latest edits. The reviewer’s slow-transport/late-approval defect remains unresolved; the adversarial hook evidence and report are incomplete, and I did not commit or request review. The patch is not safe to activate.'",
+      "summary": null,
+      "started_at": 1794199563,
+      "ended_at": 1794199750,
+      "ended_at_wib": "2026-11-09T11:49:10+07:00"
+    },
+    {
+      "id": 181,
+      "profile": "keystone",
+      "outcome": "changes_requested",
+      "error": null,
+      "summary": "Independent review of 8c2b2c4 found safety-critical defects within CEO-narrowed scope: actual hook bypasses command substitution/newline commands and mutating ss/curl/date/git option variants; timeout_s=1 accepted a late approved response after1.6006s because no outer bound is enforced; unavailable() writes local rather than global LAST_ERROR (real closed-port and pending-timeout probes reproduced stale/empty diagnostic). Fix these and add focused hook/timeout/LAST_ERROR regressions; correct evidence's false nonmatching-compatibility statement and include reproducible harness commands/output. See comment205 for exact probes/results. Five existing tests and diff-check pass, actual ls/date/git-status pass, shared MC HTTP200; deferred full matrix is not requested. No reviewer implementation edits or activation performed.",
+      "started_at": 1794199440,
+      "ended_at": 1794199553,
+      "ended_at_wib": "2026-11-09T11:45:53+07:00"
+    },
+    {
+      "id": 179,
+      "profile": "piston",
+      "outcome": "review_requested",
+      "error": null,
+      "summary": "Committed the CEO-narrowed bounded approval-hook slice as 8c2b2c4f9ca2721fd3630b46619d8a7c609de7a4. Five stdlib tests pass; a real hook run against closed loopback port 127.0.0.1:1 blocked a risky call honestly in 0.0128s while actual ls/date/git status executed unapproved; shared MC health remained HTTP 200. Full v1.0.0 live grant/denial/recovery and slow-transport/concurrency matrix remains unproven; no profile copy was synchronized or reloaded, so the patch is on disk only and activation requires authorized copy/sync plus gateway reload/restart.",
+      "started_at": 1794199253,
+      "ended_at": 1794199390,
+      "ended_at_wib": "2026-11-09T11:43:10+07:00"
+    },
+    {
+      "id": 178,
+      "profile": "piston",
+      "outcome": "crashed",
+      "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review — protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'll—including terminal, execute_code, and Kanban lifecycle calls—so I couldn’t finish or safely hand off this task. The partial patch’s unit suite ran successfully: **5 tests passed**. But the live timing/read-only evidence, commit, and Keystone review handoff are incomplete. The changes remain **uncommitted and unverified for activation**; the baseline and shared MC were not intentionally changed.'",
+      "summary": null,
+      "started_at": 1794199069,
+      "ended_at": 1794199253,
+      "ended_at_wib": "2026-11-09T11:40:53+07:00"
+    },
+    {
+      "id": 177,
+      "profile": "piston",
+      "outcome": "crashed",
+      "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review — protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'ask for continuation. Session: local-c7fe715b484bdfac7b5d6e28af3e567a8dfe65876a7bef00851039d1866c6dcb ⚠️ Piston here. I attempted `kanban_block` twice, but both lifecycle calls were also intercepted by the timing-out `pre_tool_call` hook and failed. The card may therefore remain running; I cannot change its board state from this session. The patch is partial, uncommitted, and not safe to activate.'",
+      "summary": null,
+      "started_at": 1794198757,
+      "ended_at": 1794199069,
+      "ended_at_wib": "2026-11-09T11:37:49+07:00"
+    },
+    {
+      "id": 172,
+      "profile": "piston",
+      "outcome": "blocked",
+      "error": null,
+      "summary": "Implementation is partial and currently fails its classifier test; required hook-to-structured-outcome mapping, shell-safe read-only classifier, full timing/concurrency/event-recovery tests, isolated real MC grant/deny/outage evidence, report, and commit remain incomplete. Docker absence is not a blocker; isolated uvicorn is available per the board guidance. Do not treat these uncommitted edits as operational.",
+      "started_at": 1794198256,
+      "ended_at": 1794198518,
+      "ended_at_wib": "2026-11-09T11:28:38+07:00"
+    },
+    {
+      "id": 167,
+      "profile": "piston",
+      "outcome": "blocked",
+      "error": null,
+      "summary": "The mandatory acceptance evidence requires an isolated actual Mission Control service/database. The only live MC endpoint is the shared instance, which I did not disrupt, and Docker is unavailable (`docker ps`: Cannot connect to the Docker daemon at unix:///var/run/docker.sock). Please restore Docker access or provide an isolated MC fixture/service endpoint and credentials safely via the approved vault/config path. Implementation is still incomplete; this block does not claim the defect is fixed.",
+      "started_at": 1794197862,
+      "ended_at": 1794198075,
+      "ended_at_wib": "2026-11-09T11:21:15+07:00"
+    }
+  ],
+  "block_events": [
+    {
+      "id": 2876,
+      "kind": "unblocked",
+      "payload": null,
+      "created_at": 1794198720
+    },
+    {
+      "id": 2838,
+      "kind": "blocked",
+      "payload": "{\"reason\": \"Implementation is partial and currently fails its classifier test; required hook-to-structured-outcome mapping, shell-safe read-only classifier, full timing/concurrency/event-recovery tests, isolated real MC grant/deny/outage evidence, report, and commit remain incomplete. Docker absence is not a blocker; isolated uvicorn is available per the board guidance. Do not treat these uncommitted edits as operational.\", \"kind\": \"transient\", \"recurrences\": 1, \"source_status\": \"ready\"}",
+      "created_at": 1794198518
+    },
+    {
+      "id": 2770,
+      "kind": "unblocked",
+      "payload": null,
+      "created_at": 1794198226
+    }
+  ]
+}

@@ -1,0 +1,526 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MC Approval UX additive API",
+    "version": "1.1.0",
+    "description": "Additive CEO correction: creation-time push only, no notification polling/cron, seven-day durable pending and explicit expiry. Read v1.1.0 amendment."
+  },
+  "paths": {
+    "/v1/approvals/{identifier}/seen": {
+      "post": {
+        "operationId": "markApprovalSeen",
+        "summary": "Record the first visible owner display, not consent",
+        "security": [
+          {
+            "OwnerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Idempotent canonical approval with server first_seen_at",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid identity"
+          },
+          "403": {
+            "description": "Guest, anonymous or ingest identity; no mutation"
+          },
+          "404": {
+            "description": "Approval absent"
+          }
+        }
+      }
+    },
+    "/v1/approvals": {
+      "get": {
+        "operationId": "listApprovals",
+        "security": [
+          {
+            "ViewerBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending approvals; same presentation in state and SSE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Approval"
+                      }
+                    }
+                  },
+                  "required": [
+                    "approvals"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          }
+        }
+      }
+    },
+    "/v1/approvals/{identifier}": {
+      "get": {
+        "operationId": "getApproval",
+        "summary": "Read any-status approval and explicit expiry",
+        "security": [
+          {
+            "ViewerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "404": {
+            "description": "Missing approval"
+          }
+        }
+      },
+      "post": {
+        "operationId": "decideApproval",
+        "description": "Existing owner decision; atomically reject expiry. Signed paths apply the same deadline check.",
+        "security": [
+          {
+            "OwnerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "decision"
+                ],
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "denied"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision saved, execution not confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Read-only identity"
+          },
+          "404": {
+            "description": "Missing approval"
+          },
+          "409": {
+            "description": "Already decided or expired; visible reason and canonical record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "object",
+                      "required": [
+                        "approval",
+                        "reason"
+                      ],
+                      "properties": {
+                        "approval": {
+                          "$ref": "#/components/schemas/Approval"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{identifier}/wait": {
+      "get": {
+        "operationId": "waitApproval",
+        "description": "Existing bounded wait; expired is distinct from denied. Tool timeout leaves durable row pending.",
+        "security": [
+          {
+            "IngestBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Decision or still pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "denied",
+                        "expired"
+                      ]
+                    },
+                    "expiry_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid ingest identity"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OwnerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Must resolve to owner using existing _require_owner; not any valid token."
+      },
+      "ViewerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing read authentication; query-token SSE unchanged."
+      },
+      "IngestBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing ingest identity, not owner or guest"
+      }
+    },
+    "schemas": {
+      "Approval": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "status",
+          "summary",
+          "first_seen_at",
+          "expires_at",
+          "expiry_reason",
+          "push_state"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^(?!\\s*$)(?!.*[\\r\\n\\x00-\\x1f`|])(?!.*(?:&&|<<|\\$\\(|\\$\\{)).+$"
+          },
+          "what_it_does": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "affects": {
+            "type": "string",
+            "pattern": "^(repo|money|none|service:[^\\r\\n]+|files:[^\\r\\n]+)$"
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "read",
+              "read-only-test",
+              "repo-write",
+              "file-write",
+              "delete",
+              "process-control",
+              "service-control",
+              "permissions",
+              "network-write",
+              "dns-change",
+              "spend",
+              "unknown"
+            ]
+          },
+          "needs_care": {
+            "type": "boolean"
+          },
+          "contract_version": {
+            "const": "1.1.0"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired"
+            ]
+          },
+          "first_seen_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "requested_at": {
+            "type": "number"
+          },
+          "expires_at": {
+            "type": "number"
+          },
+          "expiry_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "push_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "claimed",
+              "attempted",
+              "sent",
+              "failed",
+              "uncertain",
+              "suppressed_quiet",
+              "unconfigured",
+              null
+            ]
+          }
+        }
+      },
+      "Presentation": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:onendo:approval-presentation:1.1.0",
+        "title": "Normalized approval presentation",
+        "type": "object",
+        "required": [
+          "summary",
+          "what_it_does",
+          "affects",
+          "reversible",
+          "detail",
+          "classification",
+          "needs_care",
+          "contract_version",
+          "expires_at",
+          "expiry_reason",
+          "push_state"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^(?!\\s*$)(?!.*[\\r\\n\\x00-\\x1f`|])(?!.*(?:&&|<<|\\$\\(|\\$\\{)).+$"
+          },
+          "what_it_does": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "affects": {
+            "type": "string",
+            "pattern": "^(repo|money|none|service:[^\\r\\n]+|files:[^\\r\\n]+)$"
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "read",
+              "read-only-test",
+              "repo-write",
+              "file-write",
+              "delete",
+              "process-control",
+              "service-control",
+              "permissions",
+              "network-write",
+              "dns-change",
+              "spend",
+              "unknown"
+            ]
+          },
+          "needs_care": {
+            "type": "boolean"
+          },
+          "contract_version": {
+            "const": "1.1.0"
+          },
+          "expires_at": {
+            "type": "number"
+          },
+          "expiry_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "push_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "claimed",
+              "attempted",
+              "sent",
+              "failed",
+              "uncertain",
+              "suppressed_quiet",
+              "unconfigured",
+              null
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "classification": {
+                  "const": "unknown"
+                }
+              },
+              "required": [
+                "classification"
+              ]
+            },
+            "then": {
+              "properties": {
+                "summary": {
+                  "const": "Unclassified action — inspect the detail"
+                },
+                "needs_care": {
+                  "const": true
+                },
+                "reversible": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

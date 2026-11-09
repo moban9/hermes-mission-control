@@ -252,6 +252,89 @@ def reduce_tasks() -> tuple[list[dict], dict]:
     return tasks, kpi
 
 
+def reduce_task_filters(now: float | None = None, path: str | None = None) -> dict:
+    """Project the four bounded task categories from one read-only snapshot."""
+    import json
+    import sqlite3
+
+    now = time.time() if now is None else now
+    categories = {k: {"count": None, "total": None, "omitted": None, "rows": []}
+                  for k in ("running", "done", "failed", "blocked")}
+    result = {"available": False, "categories": categories, "failures": [],
+              "failures_omitted": None, "failures_error": "board unavailable: read_error"}
+    path = path or db.KANBAN_DB
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=.2)
+        con.row_factory = sqlite3.Row
+        con.execute("PRAGMA query_only=ON")
+        con.execute("BEGIN")
+        required = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not {"tasks", "task_runs", "task_events"} <= required:
+            raise ValueError("schema_mismatch")
+        tasks = con.execute("SELECT id,title,assignee,status,block_kind,current_step_key,started_at,completed_at FROM tasks").fetchall()
+        runs = con.execute("SELECT id,task_id,profile,outcome,error,started_at,ended_at,summary FROM task_runs ORDER BY id").fetchall()
+        events = con.execute("SELECT id,task_id,kind,payload,created_at FROM task_events WHERE kind='blocked' ORDER BY id").fetchall()
+        con.commit()
+        con.close()
+    except ValueError:
+        result["failures_error"] = "board unavailable: schema_mismatch"
+        try: con.close()
+        except Exception: pass
+        return result
+    except Exception as exc:
+        result["failures_error"] = "board unavailable: busy" if "locked" in str(exc).lower() or "busy" in str(exc).lower() else "board unavailable: read_error"
+        try: con.close()
+        except Exception: pass
+        return result
+
+    by_task = {}
+    for run in runs: by_task.setdefault(run["task_id"], []).append(dict(run))
+    blocked_events = {}
+    for event in events: blocked_events[event["task_id"]] = event
+    rows = {k: [] for k in categories}
+    failed_outcomes = {"crashed", "gave_up", "timed_out", "failed", "rate_limited"}
+    for task in tasks:
+        t = dict(task); status = t["status"] or ""; history = by_task.get(t["id"], [])
+        latest = history[-1] if history else None
+        outcome = latest["outcome"] if latest else None
+        base = {"task_id": t["id"], "title": t["title"], "assignee": t["assignee"], "status": status,
+                "blocked_kind": t["block_kind"], "current_step_key": t["current_step_key"],
+                "latest_run_id": latest["id"] if latest else None, "latest_outcome": outcome,
+                "profile": latest["profile"] if latest else None, "attempts": len(history),
+                "outcome_attempts": sum(1 for r in history if outcome is not None and r["outcome"] == outcome),
+                "error": latest["error"] if latest else None,
+                "reason": latest["error"] if latest and latest["error"] else None,
+                "blocked_reason": None, "started_at": None, "ended_at": None, "timestamp": None}
+        if latest:
+            base["started_at"] = latest["started_at"]
+            base["ended_at"] = latest["ended_at"]
+        if status == "running":
+            base["timestamp"] = (latest["started_at"] if latest else None) or t["started_at"]
+            rows["running"].append(dict(base))
+        if status == "done":
+            base["timestamp"] = t["completed_at"] or (latest["ended_at"] if latest and outcome == "completed" else None)
+            rows["done"].append(dict(base))
+        if status == "blocked":
+            base["timestamp"] = blocked_events.get(t["id"], {}).get("created_at") if isinstance(blocked_events.get(t["id"]), dict) else (blocked_events.get(t["id"])["created_at"] if blocked_events.get(t["id"]) else None)
+            ev = blocked_events.get(t["id"])
+            if ev:
+                try:
+                    payload = json.loads(ev["payload"] or "{}")
+                    base["blocked_reason"] = payload.get("reason") if isinstance(payload, dict) else None
+                except Exception: pass
+            rows["blocked"].append(dict(base))
+        if status not in {"done", "archived"} and latest and outcome in failed_outcomes:
+            base["timestamp"] = latest["ended_at"]
+            rows["failed"].append(dict(base))
+    for key, items in rows.items():
+        items.sort(key=lambda r: (r["timestamp"] is None, -(r["timestamp"] or 0), str(r["task_id"])))
+        total = len(items); shown = items[:20]
+        categories[key] = {"count": len(shown), "total": total, "omitted": total-len(shown), "rows": shown}
+    result.update({"available": True, "categories": categories, "failures": categories["failed"]["rows"],
+                   "failures_omitted": categories["failed"]["omitted"], "failures_error": None})
+    return result
+
+
 def reduce_events(now: float, limit: int = EVENT_LIMIT) -> list[dict]:
     """Recent message stream across every profile, newest first."""
     per_db = 200
@@ -535,6 +618,9 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
             agent["recent_tool_calls"] = list(la.get("recent_tool_calls") or [])
 
     tasks, task_kpi = reduce_tasks()
+    task_filters = reduce_task_filters(now=now)
+    for key in ("running", "done", "failed", "blocked"):
+        task_kpi["tasks_" + key] = task_filters["categories"][key]["total"]
     pipeline_state = pipeline_mod.read_pipelines(now=now)
     events = reduce_events(now)
     tool_counts = reduce_tool_counts()
@@ -608,6 +694,10 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
         "approvals": approvals,
         "kpis": kpis,
         "tasks": tasks,
+        "task_filters": task_filters,
+        "failures": task_filters["failures"],
+        "failures_omitted": task_filters["failures_omitted"],
+        "failures_error": task_filters["failures_error"],
         **pipeline_state,
         "events": events,
         "tool_counts": tool_counts,

@@ -99,6 +99,8 @@ svg text{font-family:Sora,system-ui,sans-serif}
 #log .lv-error{background:color-mix(in srgb, var(--rd) 14%, transparent);border-left-color:var(--rd)}
 #log .lv-error time{color:var(--rd)}
 #log .lv-error .a{color:var(--rd)}
+.task-kpi{font:inherit;text-align:left;color:var(--tx);cursor:pointer;min-width:0}.task-kpi:hover,.task-kpi[aria-pressed="true"]{border-color:var(--cy);background:var(--glow)}
+.task-kpi b{font-size:24px}.task-filter-row{border-top:1px solid var(--line);padding:10px 0;overflow-wrap:anywhere}.task-filter-row>*{margin:3px 6px 3px 0}.task-filter-row code{user-select:text}.task-filter-row button{min-height:30px;background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:4px 8px}.task-filter-row details p{white-space:pre-wrap;overflow-wrap:anywhere}.task-filter-row summary{cursor:pointer;overflow-wrap:anywhere}
 .spark{width:100%;height:70px;display:block}
 .pm{display:flex;justify-content:space-between;font-size:12px;color:var(--mu);margin:10px 0 2px}
 .pm b{color:var(--tx);font-weight:600}
@@ -220,6 +222,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 </header>
 <main>
   <section class="kpis" id="kpis"></section>
+  <section class="card" id="taskFilterPanel" aria-live="polite" hidden style="grid-column:1/-1"><h2 id="taskFilterTitle">Task details</h2><div id="taskFilterBody"></div></section>
 
   <section class="card topo">
     <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Agent network <small>Onendo orchestrator and subagents</small>
@@ -310,6 +313,7 @@ var cols={running:"var(--cy)",thinking:"var(--vi)",waiting:"var(--am)",error:"va
 
 var A=[];
 var S={done:0,failed:0,queued:0,tps:[0,0],cost:0,start:Date.now(),paused:false,filter:"all",calls:{},budget:10};
+var TASK_FILTERS=null;
 var AP=[],AL={},H=[],DM={},MEM={},LIVE=false;
 var sel=0,rp=null,stk=[],lp=[],ha=[],aid=0;
 var CM=32000,BUD=10,HL=14;
@@ -443,11 +447,21 @@ function wireTaskApprovals(){
   box.addEventListener("click",function(e){var b=e.target.closest(".apbtn");if(!b)return;
     e.stopPropagation();decideApproval(b.dataset.ap,b.dataset.ok==="1");});
 }
+function readTaskFilter(){var q=new URLSearchParams(location.hash.slice(1)),v=q.get("taskFilter");return ["running","done","failed","blocked"].indexOf(v)>=0?v:null;}
+function setTaskFilter(v){var q=new URLSearchParams(location.hash.slice(1));if(v)q.set("taskFilter",v);else q.delete("taskFilter");var h=q.toString();history.pushState(null,"",location.pathname+location.search+(h?"#"+h:""));drawKpi();}
+function taskWib(ts){if(ts==null)return "time unavailable";return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date(Number(ts)*1000))+" WIB";}
+function renderTaskFilter(){var panel=$("taskFilterPanel"),body=$("taskFilterBody"),key=readTaskFilter();if(!panel||!body)return;panel.hidden=!key;if(!key)return;var data=TASK_FILTERS||{},cat=(data.categories||{})[key]||{};$("taskFilterTitle").textContent=({running:"Running tasks",done:"Completed tasks",failed:"Failed tasks",blocked:"Blocked tasks"})[key];body.textContent="";if(data.available!==true){body.textContent=(data.failures_error||"board unavailable")+". Counts unavailable; no zero implied.";return;}var summary=document.createElement("p");summary.textContent=(cat.count||0)+" shown of "+(cat.total||0)+" · "+(cat.omitted||0)+" omitted";body.appendChild(summary);var clear=document.createElement("button");clear.type="button";clear.textContent="Clear";clear.className="btn";clear.onclick=function(){setTaskFilter(null);};body.appendChild(clear);var list=document.createElement("div");list.id="taskFilterRows";body.appendChild(list);(cat.rows||[]).forEach(function(r){var row=document.createElement("article");row.className="task-filter-row";row.dataset.taskId=r.task_id||"";var id=document.createElement("code");id.textContent=r.task_id||"";id.className="mono";row.appendChild(id);var copy=document.createElement("button");copy.type="button";copy.textContent="Copy ID";copy.setAttribute("aria-label","Copy task ID "+(r.task_id||""));copy.onclick=function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(r.task_id||"").catch(function(){id.focus();});else id.focus();};row.appendChild(copy);[r.title||"",(r.assignee||"Unassigned"),"Status: "+(r.status||""),"Outcome: "+(r.latest_outcome||"no run recorded"),"Attempts: "+r.attempts+" · outcome attempts: "+r.outcome_attempts,"Time: "+taskWib(r.timestamp)].forEach(function(x){var e=document.createElement("div");e.textContent=x;row.appendChild(e);});if(key==="running"){var elapsed=r.timestamp==null?"elapsed unavailable":"elapsed "+Math.max(0,Math.floor(Date.now()/1000-r.timestamp))+"s";var e=document.createElement("div");e.textContent="Started: "+taskWib(r.timestamp)+" · "+elapsed+(r.current_step_key?" · Step: "+r.current_step_key:"");row.appendChild(e);}if(key==="blocked"){var b=document.createElement("div");b.textContent="Blocked kind: "+(r.blocked_kind||"unknown")+" · Block reason: "+(r.blocked_reason||"no reason recorded");row.appendChild(b);}var reason=key==="blocked"?r.blocked_reason:r.reason;if(reason){var d=document.createElement("details"),s=document.createElement("summary"),full=document.createElement("p"),raw=String(reason),line=raw.split("\n").find(function(x){return x.trim();})||"no reason recorded",m=line.match(/^.*?[.!?](?=\s|$)/),preview=m?m[0]:line;if(preview.length>240)preview=preview.slice(0,240)+"…";s.textContent="Reason: "+preview;full.textContent=raw;d.appendChild(s);d.appendChild(full);row.appendChild(d);}list.appendChild(row);});if(!cat.rows||!cat.rows.length){var empty=document.createElement("p");empty.textContent=({failed:"Nothing failed on this board.",blocked:"No blocked tasks on this board.",running:"No running tasks on this board.",done:"No completed tasks on this board."})[key];body.appendChild(empty);}}
+window.addEventListener("hashchange",function(){drawKpi();});
 function drawKpi(){
   var act=A.filter(function(a){return a.s=="running"||a.s=="thinking"}).length;
-  var rate=Math.round(S.done/(S.done+S.failed)*100);
-  var k=[["Active subagents",act+"/"+A.length,"All healthy","up"],["Tasks completed",S.done,"+3 in the last hour","up"],["Success rate",rate+"%",S.failed+" failed","dn"],["Tokens per second",Math.round(S.tps[S.tps.length-1]),"steady","up"],["Spend today (WIB)","$"+S.cost.toFixed(2),"of $"+BUD+" budget","up"]];
-  $("kpis").innerHTML=k.map(function(x){return '<div class="kpi"><span>'+x[0]+'</span><b>'+x[1]+'</b><i class="'+x[3]+'">'+x[2]+'</i></div>'}).join("");
+  var cats=(TASK_FILTERS&&TASK_FILTERS.categories)||{}, activeFilter=readTaskFilter();
+  var labels={running:"Running",done:"Done",failed:"Failed",blocked:"Blocked"};
+  var k=Object.keys(labels).map(function(key){var c=cats[key]||{},n=c.count==null?"—":c.count,sub=c.omitted>0?c.count+" shown of "+c.total+" · "+c.omitted+" omitted":"All "+(c.total==null?"—":c.total)+" tasks";return '<button type="button" class="kpi task-kpi" data-task-filter="'+key+'" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter===key)+'"><span>'+labels[key]+'</span><b>'+n+'</b><i>'+sub+'</i></button>'}).join("");
+  var denom=S.done+S.failed, rate=denom?((S.done/denom)*100).toFixed(1)+"%":"—";
+  k+='<div class="kpi"><span>Active subagents</span><b>'+act+'/'+A.length+'</b><i>All healthy</i></div><button type="button" class="kpi task-kpi" data-task-filter="done" aria-label="Show completed tasks; rate based on '+S.done+' done and '+S.failed+' failed" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter==='done')+'"><span>Tasks completed</span><b>'+(cats.done&&cats.done.count!=null?cats.done.count:"—")+'</b><i>Resolved tasks</i></button><button type="button" class="kpi task-kpi" data-task-filter="done" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter==='done')+'"><span>Resolved-task success rate</span><b>'+rate+'</b><i>Based on '+S.done+' done / '+denom+' resolved</i></button><div class="kpi"><span>Tokens per second</span><b>'+Math.round(S.tps[S.tps.length-1])+'</b><i>steady</i></div><div class="kpi"><span>Spend today (WIB)</span><b>$'+S.cost.toFixed(2)+'</b><i>of $'+BUD+' budget</i></div>';
+  $("kpis").innerHTML=k;
+  $("kpis").querySelectorAll("[data-task-filter]").forEach(function(b){b.onclick=function(){var current=readTaskFilter();setTaskFilter(current===b.dataset.taskFilter?null:b.dataset.taskFilter);};});
+  renderTaskFilter();
   /* Re-clamp the floating overlay below the (now-populated) KPI row when the user
      has no saved/dragged position — the row is empty at first paint in live mode. */
   if(window.__mcOverlay)window.__mcOverlay.reclamp();
@@ -858,6 +872,7 @@ function mapState(state){
   S.budget=(state.cost_forecast&&state.cost_forecast.budget_usd)||BUD;BUD=S.budget;
   S.calls=state.tool_counts||{};
   S.tasks=state.tasks||[];S.fc=state.cost_forecast||null;
+  TASK_FILTERS=state.task_filters||null;
   var topFacts=(state.memory&&state.memory.facts)||[];
   var memByName={};(state.agents||[]).forEach(function(ra){memByName[ra.name]=(ra.memory&&ra.memory.facts)||[];});
   MEM={};A.forEach(function(a){var facts=memByName[a.n]||[];if(!facts.length&&a.n==="ceo")facts=topFacts;MEM[a.n]=facts.map(function(f){return [f.text,f.age!=null?ageAgo(f.age):(f.age_s!=null?ageAgo(f.age_s):"")]});});

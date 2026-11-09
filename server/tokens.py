@@ -54,22 +54,29 @@ def issue(label: str = "guest", days: float = 1.0) -> tuple[str, float]:
     return tok, exp
 
 
-def check(tok: str | None) -> bool:
-    """True only for a live guest token."""
+def principal(tok: str | None) -> str | None:
+    """Return a live guest identity, validating token and label in one lookup."""
     if not tok or not tok.startswith("mc-g-"):
-        return False
+        return None
     try:
         with _conn() as con:
             row = con.execute(
-                "SELECT expires_at, revoked FROM guest_tokens WHERE token_hash = ?",
+                "SELECT label, expires_at, revoked FROM guest_tokens WHERE token_hash = ?",
                 (_hash(tok),),
             ).fetchone()
     except sqlite3.Error:
-        return False
+        return None
     if not row:
-        return False
-    expires_at, revoked = row
-    return not revoked and time.time() < float(expires_at)
+        return None
+    label, expires_at, revoked = row
+    if revoked or not time.time() < float(expires_at):
+        return None
+    return "guest:" + (label or "guest")
+
+
+def check(tok: str | None) -> bool:
+    """Backward-compatible live guest-token predicate."""
+    return principal(tok) is not None
 
 
 def listing() -> list[tuple]:

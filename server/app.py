@@ -83,18 +83,25 @@ STATE = _AppState()
 def _auth(
     token: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
-) -> None:
-    """Viewer gate: the owner token never expires; guest tokens are TTL-bound."""
+) -> str:
+    """Authenticate the legacy viewer token or a live read-only guest."""
     if not VIEWER_TOKEN:
-        return
+        return "anonymous"
     provided = token
     if not provided and authorization and authorization.lower().startswith("bearer "):
         provided = authorization[7:].strip()
     if provided == VIEWER_TOKEN:
-        return
-    if tokens.check(provided):
-        return
+        return "owner"
+    identity = tokens.principal(provided)
+    if identity:
+        return identity
     raise HTTPException(status_code=401, detail="invalid, expired, or missing viewer token")
+
+
+def _require_owner(principal: str = Depends(_auth)) -> str:
+    if principal != "owner":
+        raise HTTPException(status_code=403, detail="read-only token")
+    return principal
 
 
 def _bearer(authorization: str | None) -> str:
@@ -517,7 +524,7 @@ def v1_agents_stuck(_auth: None = Depends(_auth)) -> dict:
 
 @app.post("/v1/agents/stuck/resolve")
 def v1_agents_stuck_resolve(body: dict | None = Body(default=None),
-                            _auth: None = Depends(_auth)) -> dict:
+                             _auth: str = Depends(_require_owner)) -> dict:
     """Close stale sessions so agents stop reading as stuck.
 
     Only sessions that are open, idle beyond ``min_idle_min`` (default 30) and
@@ -605,7 +612,7 @@ def _log_decision(identifier: str, status: str, decided_by: str,
 
 @app.post("/v1/approvals/{identifier}")
 def v1_approval_decide(identifier: str, body: dict = Body(...),
-                       _auth: None = Depends(_auth)) -> dict:
+                       _auth: str = Depends(_require_owner)) -> dict:
     """Record an approval decision (viewer auth).  409 if already decided."""
     decision = str((body or {}).get("decision") or (body or {}).get("status") or "").strip().lower()
     if decision in ("approve", "approved", "yes"):

@@ -92,7 +92,7 @@ def load_snapshot(path: str | None = None) -> Snapshot:
         runs_for_task = history.get(task.get("id"), [])
         latest = runs_for_task[-1] if runs_for_task else None
         outcome = latest.get("outcome") if latest else None
-        failed = status not in {"done", "archived"} and latest is not None and (outcome is None or outcome in FAILED_OUTCOMES)
+        failed = status not in {"done", "archived"} and latest is not None and outcome in FAILED_OUTCOMES
         totals["tasks_total"] += 1
         totals["tasks_queued"] += status in queued
         totals["tasks_running"] += status == "running"

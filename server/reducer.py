@@ -369,6 +369,52 @@ def reduce_task_filters(now: float | None = None, path: str | None = None) -> di
     return result
 
 
+def reduce_task_filters(now: float | None = None, path: str | None = None) -> dict:
+    """Project categories, legacy task KPIs, and task rows from one snapshot."""
+    from snapshot import load_snapshot
+
+    snap = load_snapshot(path or db.KANBAN_DB)
+    from datetime import datetime, timezone
+    task_rows = [{
+        "id": t.get("id"), "title": t.get("title"), "assignee": t.get("assignee"),
+        "status": t.get("status") or "", "priority": t.get("priority"),
+        "created_at": t.get("created_at"), "started_at": t.get("started_at"),
+        "completed_at": t.get("completed_at"), "block_kind": t.get("block_kind"),
+        "parent_id": t.get("parent_ids"), "child_count": t.get("child_count") or 0,
+    } for t in snap.tasks]
+    def contract_row(row):
+        task = next((t for t in task_rows if t["id"] == row["task_id"]), {})
+        return {
+            "task_id": str(row.get("task_id") or ""), "title": str(row.get("title") or ""),
+            "assignee": row.get("assignee"), "profile": row.get("profile"),
+            "task_status": str(row.get("status") or ""), "latest_run_id": row.get("latest_run_id"),
+            "outcome": row.get("latest_outcome"), "attempts": row.get("attempts", 0),
+            "outcome_attempts": row.get("outcome_attempts", 0), "ended_at": row.get("ended_at"),
+            "started_at": row.get("started_at"), "completed_at": task.get("completed_at"),
+            "timestamp": row.get("timestamp"), "error": row.get("error"),
+            "blocked_kind": row.get("blocked_kind"),
+            "block_reason": (row.get("blocked_reason", {}).get("reason") if isinstance(row.get("blocked_reason"), dict) else row.get("blocked_reason")),
+            "current_step": row.get("current_step_key"),
+        }
+    categories = {name: {**category, "rows": [contract_row(row) for row in category["rows"]]}
+                  for name, category in snap.categories.items()}
+    filters = {
+        "version": "1.0.0", "available": snap.available, "error": snap.error,
+        "generated_at": datetime.now(timezone.utc).timestamp(),
+        "scope": "current_board_all_history", "limit": 20, "categories": categories,
+        "success_rate_pct": snap.legacy_kpis["success_rate"],
+    }
+    return {
+        "task_filters": filters,
+        "failures": categories["failed"]["rows"],
+        "failures_omitted": categories["failed"]["omitted"],
+        "failures_error": snap.error,
+        "tasks": task_rows,
+        "task_kpi": snap.legacy_kpis,
+        **({"empty": not bool(snap.tasks)} if snap.available else {}),
+    }
+
+
 def reduce_events(now: float, limit: int = EVENT_LIMIT) -> list[dict]:
     """Recent message stream across every profile, newest first."""
     per_db = 200
@@ -651,10 +697,10 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
             agent["tool_stats"] = _live_tool_stats(la.get("tool_stats"))
             agent["recent_tool_calls"] = list(la.get("recent_tool_calls") or [])
 
-    tasks, task_kpi = reduce_tasks()
-    task_filters = reduce_task_filters(now=now)
-    for key in ("running", "done", "failed", "blocked"):
-        task_kpi["tasks_" + key] = task_filters["categories"][key]["total"]
+    task_projection = reduce_task_filters(now=now)
+    task_filters = task_projection["task_filters"]
+    tasks = task_projection["tasks"]
+    task_kpi = task_projection["task_kpi"]
     pipeline_state = pipeline_mod.read_pipelines(now=now)
     events = reduce_events(now)
     tool_counts = reduce_tool_counts()
@@ -729,9 +775,9 @@ def reduce_state(now: float | None = None, budget_usd: float | None = None) -> d
         "kpis": kpis,
         "tasks": tasks,
         "task_filters": task_filters,
-        "failures": task_filters["failures"],
-        "failures_omitted": task_filters["failures_omitted"],
-        "failures_error": task_filters["failures_error"],
+        "failures": task_projection["failures"],
+        "failures_omitted": task_projection["failures_omitted"],
+        "failures_error": task_projection["failures_error"],
         **pipeline_state,
         "events": events,
         "tool_counts": tool_counts,

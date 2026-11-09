@@ -41,16 +41,19 @@ class TaskFilterProjectionTests(unittest.TestCase):
 
     def test_latest_run_semantics_and_reason(self):
         r = reducer.reduce_task_filters(now=30, path=self.path)
-        self.assertTrue(r["available"])
-        cats = r["categories"]
+        filters = r["task_filters"]
+        self.assertTrue(filters["available"])
+        self.assertEqual(set(filters), {"version", "available", "error", "generated_at", "scope", "limit", "categories", "success_rate_pct"})
+        cats = filters["categories"]
         failed = {x["task_id"]: x for x in cats["failed"]["rows"]}
+        self.assertEqual(set(failed["f"]), {"task_id", "title", "assignee", "profile", "task_status", "latest_run_id", "outcome", "attempts", "outcome_attempts", "ended_at", "started_at", "completed_at", "timestamp", "error", "blocked_kind", "block_reason", "current_step"})
         self.assertEqual(failed["f"]["attempts"], 11)
         self.assertEqual(failed["f"]["outcome_attempts"], 6)
         self.assertEqual(failed["f"]["error"], "diagnostic:v1 last_tool=browser_click approval_state=denied tool_call_id=call-<x> source=approval")
         self.assertNotIn("d", failed)
         self.assertNotIn("o", failed)
         self.assertNotIn("a", failed)
-        self.assertEqual(cats["blocked"]["rows"][0]["blocked_reason"], "needs protocol correction")
+        self.assertEqual(cats["blocked"]["rows"][0]["block_reason"], "needs protocol correction")
         self.assertNotIn("s", {x["task_id"] for x in cats["blocked"]["rows"]})
         self.assertEqual(r["failures"], cats["failed"]["rows"])
 
@@ -60,11 +63,12 @@ class TaskFilterProjectionTests(unittest.TestCase):
             c = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)
             c.execute("INSERT INTO tasks VALUES('x','x','p','done',NULL,NULL,1,1)")
         unavailable = reducer.reduce_task_filters(path=self.path + ".missing")
-        self.assertFalse(unavailable["available"])
-        self.assertIsNone(unavailable["categories"]["failed"]["count"])
+        unavailable_filters = unavailable["task_filters"]
+        self.assertFalse(unavailable_filters["available"])
+        self.assertIsNone(unavailable_filters["categories"]["failed"]["count"])
         self.assertEqual(unavailable["failures"], [])
         self.assertIsNotNone(unavailable["failures_error"])
-        self.assertEqual(r["categories"]["failed"]["count"], len(r["failures"]))
+        self.assertEqual(r["task_filters"]["categories"]["failed"]["count"], len(r["failures"]))
         self.assertIsNone(unavailable["task_kpi"]["tasks_running"])
 
     def test_snapshot_includes_tasks_and_full_kpis_from_same_projection(self):
@@ -83,7 +87,7 @@ class TaskFilterProjectionTests(unittest.TestCase):
         for i in range(25):
             c.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?)", (f"r{i:02}", "running", "p", "running", None, None, i, None, 1, i, 0))
         c.commit(); c.close()
-        cat = reducer.reduce_task_filters(path=self.path)["categories"]["running"]
+        cat = reducer.reduce_task_filters(path=self.path)["task_filters"]["categories"]["running"]
         self.assertEqual((cat["count"], cat["total"], cat["omitted"]), (20, 26, 6))
         self.assertEqual(cat["count"], len(cat["rows"]))
         self.assertEqual(len({x["task_id"] for x in cat["rows"]}), 20)

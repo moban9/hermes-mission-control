@@ -55,16 +55,15 @@ class SnapshotTests(unittest.TestCase):
         result = snapshot.load_snapshot(self.path)
         failed = result.categories['failed']
         blocked = result.categories['blocked']
-        self.assertEqual((failed['count'], failed['total'], failed['omitted']), (1, 1, 0))
-        row = failed['rows'][0]
-        self.assertEqual(row['latest_outcome'], None)
-        self.assertEqual(row['attempts'], 2)
-        self.assertEqual(row['outcome_attempts'], 0)
-        self.assertEqual(row['label'], 'no outcome · 2 attempts')
-        self.assertEqual(row['reason'], 'no reason recorded')
+        self.assertEqual((failed['count'], failed['total'], failed['omitted']), (0, 0, 0))
+        self.assertEqual(blocked['rows'][0]['latest_outcome'], None)
+        self.assertEqual(blocked['rows'][0]['attempts'], 2)
+        self.assertEqual(blocked['rows'][0]['outcome_attempts'], 0)
+        self.assertEqual(blocked['rows'][0]['label'], 'no outcome · 2 attempts')
+        self.assertEqual(blocked['rows'][0]['reason'], 'no reason recorded')
         self.assertEqual(blocked['rows'][0]['blocked_reason'], {'reason': 'event JSON'})
         self.assertEqual(blocked['rows'][0]['blocked_kind'], 'stale')
-        self.assertEqual(result.legacy_kpis['tasks_failed'], 1)
+        self.assertEqual(result.legacy_kpis['tasks_failed'], 0)
 
     def test_category_cap_does_not_cap_totals(self):
         with sqlite3.connect(self.path) as con:

@@ -45,6 +45,24 @@ export class StubEventSource {
   static activeCount() { return this.instances.filter(instance => !instance.closed).length; }
 }
 
+// Replace one callable with a deterministic throwing stub and return its restoration function.
+export function stubThrow(obj, fnName) {
+  if (!obj || typeof obj[fnName] !== 'function') throw new TypeError(`Missing function: ${fnName}`);
+  const original = obj[fnName];
+  obj[fnName] = function throwingStub() { throw new Error(`Stubbed render: ${fnName}`); };
+  return () => { obj[fnName] = original; };
+}
+
+// Stub named render functions on an object and return one teardown for all replacements.
+export function withThrowingRenders(obj, names = ['topo', 'mem', 'detail', 'errors']) {
+  if (Array.isArray(obj)) { names = obj; obj = globalThis; }
+  const restores = [];
+  try {
+    for (const name of names) restores.push(stubThrow(obj, name));
+  } catch (error) { restores.reverse().forEach(restore => restore()); throw error; }
+  return () => restores.reverse().forEach(restore => restore());
+}
+
 export function installHarness(target = globalThis) {
   const original = {
     fetch: target.fetch,
@@ -107,12 +125,52 @@ export function installHarness(target = globalThis) {
     return id;
   };
   const counters = () => ({ activeTimers: clock.activeCount(), activePollTimers: clock.activePollTimerCount(), activeEventSources: StubEventSource.activeCount(), eventSourceInstances: StubEventSource.instances.length });
+  const errors = [];
+  const errorTarget = target.window || target;
+  const previousOnError = errorTarget.onerror;
+  const onError = (...args) => { errors.push(args[0] || new Error('window.onerror')); };
+  const onRejection = event => { errors.push(event.reason || new Error('unhandledrejection')); };
+  errorTarget.onerror = onError;
+  errorTarget.addEventListener?.('unhandledrejection', onRejection);
+  const activeCount = kind => {
+    if (kind === 'timer') return clock.activeCount();
+    if (kind === 'eventsource') return StubEventSource.activeCount();
+    throw new TypeError(`Unknown active count kind: ${kind}`);
+  };
+  // Assert all instrumented resources are closed and no global error hook observed an escape.
+  const assertNoLeaks = () => {
+    const leaks = [];
+    if (clock.activePollTimerCount()) leaks.push(`${clock.activePollTimerCount()} poll timer(s)`);
+    if (StubEventSource.activeCount()) leaks.push(`${StubEventSource.activeCount()} EventSource instance(s)`);
+    if (errors.length) leaks.push(`${errors.length} unhandled error(s): ${errors.map(String).join('; ')}`);
+    if (leaks.length) throw new Error(`Harness leaks: ${leaks.join(', ')}`);
+  };
+  // Clear fake resources, error observations, and rendered DOM for repeatable test setup.
+  const resetHarness = () => {
+    clock.clearAll();
+    for (const es of StubEventSource.instances) es.close();
+    StubEventSource.instances = [];
+    errors.length = 0;
+    const document = (target.window || target).document || target.document;
+    if (document?.body) document.body.replaceChildren?.();
+    if (document?.body && !document.body.replaceChildren) document.body.innerHTML = '';
+    if (document?.documentElement && document.documentElement !== document.body) document.documentElement.innerHTML = '';
+  };
+  // Replace render functions on the supplied object while preserving their originals.
+  const throwingRenders = (obj, names = ['topo', 'mem', 'detail', 'errors']) => {
+    if (Array.isArray(obj)) { names = obj; obj = target; }
+    return withThrowingRenders(obj, names);
+  };
   return {
-    clock, counters, setFetch(sequence) { target.fetch = createFetchStub(sequence); return target.fetch; },
+    clock, counters, activeCount, assertNoLeaks, resetHarness, stubThrow,
+    withThrowingRenders: throwingRenders,
+    setFetch(sequence) { target.fetch = createFetchStub(sequence); return target.fetch; },
     restore() {
       clock.clearAll();
       for (const es of StubEventSource.instances) es.close();
       for (const [key, value] of Object.entries(original)) target[key] = value;
+      errorTarget.onerror = previousOnError;
+      errorTarget.removeEventListener?.('unhandledrejection', onRejection);
       StubEventSource.instances = [];
       target.fetch = original.fetch;
     },

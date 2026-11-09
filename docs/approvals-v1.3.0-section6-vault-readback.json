@@ -1,0 +1,130 @@
+{
+  "task": "t_4b9e93ef",
+  "verified_wib": "2026-11-09T20:30:54.419016+07:00",
+  "transport": "Configured bridge HTTPS; initial CA validation failed; explicit per-run pinned leaf trust, chain verified against pinned leaf, hostname checking disabled for bridge IP. No external relay. Exact certificate pin checked before authentication.",
+  "tls_leaf_sha256": "e1669e2c46c6f0daf9789d180870cc8668e41de3a6ff22e395ae93579ed46e7f",
+  "readbacks": [
+    {
+      "local_path": "docs/approvals-ux-v1.3.0-amendment.md",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-ux-v1.3.0-amendment.md",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 28210,
+      "sha256": "85da309ce7c3644127cca4b4372f4ccbd4152ede743fb39f0e8c126fe5cbe06a",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-ux-v1.3.0.openapi.json",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-ux-v1.3.0.openapi.json",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 67204,
+      "sha256": "17667dc1f028da9acf9657d696fc9093bbe7606114161d9287ec931dbc370087",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-attention-v1.3.0.sql",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-attention-v1.3.0.sql",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 16483,
+      "sha256": "aa530b41b4c5f1405d41024eba4986e5c07d0403e9ce41fbb3dc08f2c40d591d",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-presentation-v1.3.0.schema.json",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-presentation-v1.3.0.schema.json",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 12719,
+      "sha256": "abdedc5a185f624f504948eab42391d6d68bdc50f2c62474e03936b9f42e1fe8",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/check-approvals-v1.3.0.py",
+      "vault_path": "Architecture/Mission Control/contracts/check-approvals-v1.3.0.py",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 15524,
+      "sha256": "a5920c7347b5fc63405e2d0a524622810efa5f501e7ebe1c1b12b0b0e5996c1a",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-v1.3.0-validation.txt",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-v1.3.0-validation.txt",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 1493,
+      "sha256": "756545b11048d7aab2ff62b56e84dfe5126c1e0e34be0bb8141224737984cb61",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/redaction-contract-v1.1.0.md",
+      "vault_path": "Architecture/Mission Control/contracts/redaction-contract-v1.1.0.md",
+      "put_status": 204,
+      "readback_status": 200,
+      "bytes": 15174,
+      "sha256": "d9cad0810bb88efa7624126b7e9bd8f9a8c01351faf0203edbc143acc6a32c99",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-v1.3.0-section6-option-a.md",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-v1.3.0-section6-option-a.md",
+      "put_status": 204,
+      "readback_status": 200,
+      "bytes": 16895,
+      "sha256": "78a4f1ab5ba9d2e77251c35f19c680c7b1191ffe87893c090a7b7de4747d3371",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-v1.3.0-section6-option-a.openapi.json",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-v1.3.0-section6-option-a.openapi.json",
+      "put_status": 204,
+      "readback_status": 200,
+      "bytes": 9188,
+      "sha256": "d180c0c28566b63e524cb6f10dc56ea21c39abf575c2b1ad3b66891a1c752053",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/check-approvals-v1.3.0-section6.py",
+      "vault_path": "Architecture/Mission Control/contracts/check-approvals-v1.3.0-section6.py",
+      "put_status": 204,
+      "readback_status": 200,
+      "bytes": 11680,
+      "sha256": "4e65c583635188ed3e96b252701af03c3b00c9dbe02a875535fcd1f1f062cdad",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-v1.3.0-section6-validation.txt",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-v1.3.0-section6-validation.txt",
+      "put_status": 204,
+      "readback_status": 200,
+      "bytes": 3933,
+      "sha256": "eeaad435dfda9820d0df89460eabd59b559cf4fa14e3b054f8256c8d8594799c",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-v1.3.0-ceo-disposition.md",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-v1.3.0-ceo-disposition.md",
+      "put_status": null,
+      "readback_status": 200,
+      "bytes": 15959,
+      "sha256": "c16f44c9808fb6ef268f33db60bfe8a353c58914252759be845cbe5baf157acd",
+      "byte_equal": true
+    },
+    {
+      "local_path": "docs/approvals-v1.3.0-section6-hashes.json",
+      "vault_path": "Architecture/Mission Control/contracts/approvals-v1.3.0-section6-hashes.json",
+      "put_status": 204,
+      "readback_status": 200,
+      "bytes": 4127,
+      "sha256": "1cba176791f43d78e40be48653834a3f2e1421f189e67fcfb2b6d6db8feafe4c",
+      "byte_equal": true
+    }
+  ],
+  "count": 13,
+  "all_byte_equal": true,
+  "self_hash_rule": "This evidence file is mirrored and read back separately; its SHA-256 appears in board handoff, not inside itself.",
+  "runtime_evidence": false,
+  "build_authorized": false
+}

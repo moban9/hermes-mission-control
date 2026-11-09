@@ -1,0 +1,98 @@
+COMMAND: python3 docs/check-approvals-v1.3.0-section6.py
+PASS frozen 7/7 exact hashes; entire original prose byte-identical, including sections 1-5/7-8
+PASS artifact parity, status/alias confinement, local refs, page/state separation, 405/415 and explicit signed hold
+EVIDENCE inspected scrubber SHA256 ce4704d4e0abddacdb09b1a839bd7e7dfca1b5478d71412c2ec1142884272a86
+PASS all four terminal statuses: same-status field tampering, direct UPDATE/DELETE, allowed first-seen once; immutable claim generated
+PASS snapshot/projection equality and atomic rollback of history + generated claim + audit
+PASS distinct immutable notification stages: quiet suppression, attempt, outcome, no reset/retry, crash/uncertainty, terminal reservation race
+PASS representative persistence safety-hook fixtures, unsafe key/nested/identity/boolean rejection; missing hook fails closed
+PASS duplicate JSON keys, character/UTF-8 byte limits, and immutable delayed result after terminal decision
+PASS 101 pending fixture: bounded snapshot 100, truncation flag, full latest ledger 101 retained
+CAPACITY decimal bytes: {'per_event': 1720000, 'baseline_daily': 1720000000, 'ten_x_daily': 17200000000, 'ten_x_30_days': 516000000000}
+PASS expected SQL rejections: 151
+LIMIT: design fixtures only, scoped schema assertion evaluator not meta-validator, existing scrubber representative classes only; no actual API/SSE/log/notification runtime, full-policy canaries, pagination handler, Bronze consumer or performance/restore benchmark executed. A1–A12 and independent reviews remain gates.
+FROZEN_CHECKER_EXIT_CODE 0
+REJECT approve_missing_action
+REJECT approve_missing_signature
+REJECT approve_missing_csrf_token
+REJECT approve_missing_payload
+REJECT approve_bad_signature_shape
+REJECT approve_client_identity
+REJECT approve_invalid_payload
+REJECT deny_missing_action
+REJECT deny_missing_signature
+REJECT deny_missing_csrf_token
+REJECT deny_missing_payload
+REJECT deny_bad_signature_shape
+REJECT deny_client_identity
+REJECT deny_invalid_payload
+REJECT ask_missing_action
+REJECT ask_missing_signature
+REJECT ask_missing_csrf_token
+REJECT ask_missing_payload
+REJECT ask_bad_signature_shape
+REJECT ask_client_identity
+REJECT ask_invalid_payload
+REJECT stored_reference
+REJECT stored_encrypted_reference
+REJECT stored_signature
+REJECT stored_csrf_token
+REJECT stored_key
+REJECT ttl_1000
+REJECT ttl_1301
+REJECT approve_query_sig
+REJECT approve_path_sig
+REJECT deny_query_sig
+REJECT deny_path_sig
+REJECT ask_query_sig
+REJECT ask_path_sig
+REJECT fragment_secret
+REJECT A01_url
+REJECT A01_signed_urls
+REJECT A02_get_status
+REJECT A02_writes
+REJECT A02_ttl_extended
+REJECT A03_method
+REJECT A03_signature_location
+REJECT A03_recomputed_from_record
+REJECT A03_tamper_status
+REJECT A04_get_writes
+REJECT A04_decision_get_status
+REJECT A04_allow
+REJECT A05_cross_cap_status
+REJECT A05_missing_cookie_status
+REJECT A05_wrong_origin_status
+REJECT A06_ttl
+REJECT A06_boundary_status
+REJECT A06_comparator
+REJECT A06_race_commits
+REJECT A06_crash_partial_rows
+REJECT A07_reuse_status
+REJECT A07_existing_equal
+REJECT A07_extra_events
+REJECT A07_after_ttl_status
+REJECT A08_Referrer-Policy
+REJECT A08_Cache-Control
+REJECT A08_query_in_logs
+REJECT A08_reference_in_logs
+REJECT A09_stored_identity
+REJECT A09_raw_persisted
+REJECT A09_exported
+REJECT A10_legacy_status
+REJECT A10_legacy_writes
+REJECT A10_build_authorized
+REJECT mac_binding_1
+REJECT mac_binding_2
+REJECT mac_binding_3
+REJECT mac_binding_4
+REJECT mac_binding_5
+REJECT mac_binding_6
+REJECT mac_binding_7
+REJECT matching_double_submit_cross_cap
+PASS A01-A10 static contract and synthetic request/storage/observation/MAC fixtures
+OPTION_A_EXPECTED_REJECTIONS 77
+LIMIT design assertions only; no real browser/HTTP/DB/WAL/log/transport/race/crash/comparator-spy evidence. Independent Seal review pending. No build authorization.
+
+EXIT_CODE: 0
+FROZEN_EXPECTED_SQL_REJECTIONS: 151
+OPTION_A_EXPECTED_NEGATIVE_REJECTIONS: 77

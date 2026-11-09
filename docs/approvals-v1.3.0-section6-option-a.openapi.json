@@ -1,0 +1,56 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "Additive approvals v1.3.0 section 6 Option A adapter ONLY", "version": "1.3.0-section6.1", "description": "Normative semantics: approvals-v1.3.0-section6-option-a.md. Does not replace base OpenAPI or authorize implementation."},
+  "x-base-contract": "approvals-ux-v1.3.0.openapi.json",
+  "x-design-only": true,
+  "x-constraints": ["A01", "A02", "A03", "A04", "A05", "A06", "A07", "A08", "A09", "A10"],
+  "x-storage": {"capability": {"$ref": "#/components/schemas/CapabilityRecord"}, "receipt": {"$ref": "#/components/schemas/Receipt"}, "raw-reference-persistence": false, "exports": [], "transaction": "same BEGIN IMMEDIATE as decision or reviewed ask append; immutable one receipt per cap_hash"},
+  "x-max-ttl-seconds": 300,
+  "x-comparator": "hmac.compare_digest over fixed-length decoded MAC bytes",
+  "x-log-policy": {"strip-query-before-log": true, "template-capability-path": true, "body-cookie-auth-logging": false},
+  "x-legacy-signed-routes": {"status": 410, "code": "retired_route", "writes": 0, "redirect": false},
+  "paths": {
+    "/approval-capabilities/{reference}": {
+      "parameters": [{"$ref": "#/components/parameters/Reference"}],
+      "get": {
+        "operationId": "renderOptionACard",
+        "security": [{"OwnerBearer": []}],
+        "description": "Read-only; no storage writes, seen/expiry materialization, dispatch or consumption. Live card signs three actions in response memory; consumed card read-only. All query parameters forbidden422. Strict canonical reference decoding. Headers on errors too.",
+        "responses": {
+          "200": {"description": "Authenticated HTML approval card; signatures only in form data, never URL", "headers": {"Referrer-Policy": {"schema": {"const": "no-referrer"}}, "Cache-Control": {"schema": {"const": "no-store"}}, "Set-Cookie": {"description": "__Host-mc-csrf-<cap_hash>=<token>; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age <= remaining TTL; no Domain", "schema": {"type": "string"}}, "Content-Security-Policy": {"schema": {"const": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}}}, "content": {"text/html": {"schema": {"type": "string"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/Unknown"}, "410": {"$ref": "#/components/responses/Expired"}, "422": {"$ref": "#/components/responses/Invalid"}, "405": {"description": "Only GET; HEAD also rejects, no writes", "headers": {"Allow": {"schema": {"const": "GET"}}}}
+        }
+      }
+    },
+    "/approval-capabilities/{reference}/decision": {
+      "parameters": [{"$ref": "#/components/parameters/Reference"}],
+      "post": {
+        "operationId": "submitOptionAAction",
+        "security": [{"OwnerBearer": []}],
+        "description": "No query permitted. Requires exact Origin/Sec-Fetch-Site same-origin and cap-specific host CSRF cookie matching body, both revalidated server-side. Request max65536 UTF-8 bytes, strict JSON. Auth then hash lookup then constant-time MAC/CSRF checks; receipt lookup before unused-cap TTL/lifecycle guard inside atomic transaction. Ask unavailable503 until separately reviewed conversation implementation; never grants or changes pending deadline.",
+        "parameters": [{"name": "Origin", "in": "header", "required": true, "schema": {"type": "string"}, "description": "Exactly configured HTTPS MC origin"}, {"name": "Sec-Fetch-Site", "in": "header", "required": true, "schema": {"const": "same-origin"}}, {"name": "Cookie", "in": "header", "required": true, "schema": {"type": "string"}, "description": "Exactly one __Host-mc-csrf-<cap_hash> entry, matching body csrf_token and server derivation"}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ActionInput"}}}},
+        "responses": {
+          "200": {"description": "Approve/deny committed with immutable receipt", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Result"}}}},
+          "201": {"description": "Reviewed ask append committed, pending retained; no grant", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Result"}}}},
+          "409": {"description": "Authenticated used cap returns existing stored result even after TTL; terminal/stale conflicts do not consume", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Conflict"}}}},
+          "401": {"$ref": "#/components/responses/Unauthorized"}, "403": {"$ref": "#/components/responses/Forbidden"}, "404": {"$ref": "#/components/responses/Unknown"}, "410": {"$ref": "#/components/responses/Expired"}, "413": {"description": "Body too large, no writes"}, "415": {"description": "application/json only, no writes"}, "422": {"$ref": "#/components/responses/Invalid"}, "503": {"description": "feature_unavailable ask or frozen capacity error; atomic zero writes"}, "405": {"description": "GET/HEAD/PUT/DELETE never decide", "headers": {"Allow": {"schema": {"const": "POST"}}}}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {"Reference": {"name": "reference", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}, "description": "32 random bytes, canonical base64url; decode/re-encode exact; no signature or query"}},
+    "securitySchemes": {"OwnerBearer": {"type": "http", "scheme": "bearer", "description": "Existing authenticated owner only; no token in URL; reference alone grants nothing"}},
+    "responses": {"Unauthorized": {"description": "401 invalid/missing identity, fixed error, no writes"}, "Forbidden": {"description": "403 owner/scope or authorization_failed MAC/CSRF/Origin, no echo/write"}, "Unknown": {"description": "404 unknown/malformed reference, no echo/write"}, "Expired": {"description": "410 unused capability outside [issued_at,expires_at); no write"}, "Invalid": {"description": "422 invalid input/query, no echo/write"}},
+    "schemas": {
+      "Hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "Epoch": {"type": "number", "minimum": 0, "description": "Strict finite server Unix epoch seconds; no booleans"},
+      "ActionInput": {"type": "object", "additionalProperties": false, "required": ["action", "signature", "csrf_token", "payload"], "properties": {"action": {"enum": ["approve", "deny", "ask"]}, "signature": {"$ref": "#/components/schemas/Hex"}, "csrf_token": {"$ref": "#/components/schemas/Hex"}, "payload": {"type": "object"}}, "oneOf": [{"properties": {"action": {"enum": ["approve", "deny"]}, "payload": {"type": "object", "additionalProperties": false}}}, {"properties": {"action": {"const": "ask"}, "payload": {"type": "object", "additionalProperties": false, "required": ["question", "client_message_id"], "properties": {"question": {"type": "string", "minLength": 1, "maxLength": 8000, "pattern": "\\S"}, "client_message_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"}}}}}]},
+      "CapabilityRecord": {"type": "object", "additionalProperties": false, "required": ["cap_hash", "request_id", "owner_id", "intent_version", "issued_at", "expires_at", "key_id"], "properties": {"cap_hash": {"$ref": "#/components/schemas/Hex"}, "request_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"}, "owner_id": {"type": "string", "minLength": 1, "maxLength": 128}, "intent_version": {"$ref": "#/components/schemas/Hex"}, "issued_at": {"$ref": "#/components/schemas/Epoch"}, "expires_at": {"$ref": "#/components/schemas/Epoch"}, "key_id": {"type": "string", "minLength": 1, "maxLength": 128}}, "description": "Immutable private record. Cross-field guard: 0<expires_at-issued_at<=300 and expires_at<=approval expiry. No raw/reversible reference or security material."},
+      "Result": {"type": "object", "additionalProperties": false, "required": ["action", "approval", "question_seq"], "properties": {"action": {"enum": ["approve", "deny", "ask"]}, "approval": {"$ref": "approvals-ux-v1.3.0.openapi.json#/components/schemas/Approval"}, "question_seq": {"type": ["integer", "null"], "minimum": 1}}, "description": "approve=>approved and question_seq null; deny=>denied and null; ask=>pending and committed positive question_seq. Fresh egress policy always applies."},
+      "Receipt": {"type": "object", "additionalProperties": false, "required": ["cap_hash", "consumed_at", "result"], "properties": {"cap_hash": {"$ref": "#/components/schemas/Hex"}, "consumed_at": {"$ref": "#/components/schemas/Epoch"}, "result": {"$ref": "#/components/schemas/Result"}}},
+      "Conflict": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["code", "existing"], "properties": {"code": {"const": "capability_used"}, "existing": {"$ref": "#/components/schemas/Result"}}}, {"type": "object", "additionalProperties": false, "required": ["code", "approval"], "properties": {"code": {"enum": ["already_terminal", "stale_intent"]}, "approval": {"$ref": "approvals-ux-v1.3.0.openapi.json#/components/schemas/Approval"}}}]}
+    }
+  }
+}

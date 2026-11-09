@@ -53,6 +53,10 @@ tests/
   path_a_test.py    path-A test: events ingest + idempotency + approval round-trip
 ```
 
+## Panel registry schema
+
+`docs/panel-spec.json` is the machine-readable registry derived from the dashboard panel descriptions in `docs/dashboard.md`. It is a JSON array; each entry requires a non-empty `panelName`, CSS `selector`, and non-empty `viewports` array of `WIDTHxHEIGHT` strings. Optional `tolerancePx` is a non-negative number (defaults to `0`); `notes` is an optional explanatory string (defaults to empty). The pure Node parser is `require('./harness/spec').parseSpec(filePath)` and reports malformed entries by one-based entry number.
+
 ## Run
 
 ```bash

@@ -1,0 +1,14 @@
+[
+  { "panelName": "KPI row", "selector": "#kpis", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Agent network", "selector": "#orgChart", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Task pipeline", "selector": "#taskPipelinePanel", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Subagents", "selector": "#orgChart", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Live event stream", "selector": "#logsCard", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Throughput", "selector": "#spark", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Tool calls", "selector": "#tools", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Alerts", "selector": "#alerts", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Approval queue", "selector": "#appr", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Context and memory", "selector": "#ctx", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Cost forecast", "selector": "#cost", "viewports": ["1440x900", "390x844"] },
+  { "panelName": "Replay", "selector": "#heat", "viewports": ["1440x900", "390x844"] }
+]

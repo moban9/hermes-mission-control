@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { newPage } from './new_page.mjs';
+
+const page = newPage();
+page.run();
+assert.equal(typeof page.mapState, 'function');
+assert.equal(typeof page.drawAll, 'function');
+page.context.document.getElementById('fixture').textContent = 'painted';
+assert.equal(page.getText('fixture'), 'painted');
+page.context.document.getElementById('fixture').className = 'active';
+assert.equal(page.getClass('fixture'), 'active');
+page.context.document.getElementById('fixture').innerHTML = '<b>markup</b>';
+assert.match(page.getHTML('fixture'), /markup/);
+assert.ok(page.paintedSections() >= 0);
+page.context.window.onerror(new Error('captured window error'));
+assert.throws(() => page.h.assertNoLeaks(), /captured window error/);
+page.h.errors.length = 0;
+page.context.window.dispatchEvent({ type: 'unhandledrejection', reason: new Error('captured rejection') });
+assert.throws(() => page.h.assertNoLeaks(), /captured rejection/);
+page.h.errors.length = 0;
+page.context.window.dispatchEvent({ type: 'unhandledrejection', reason: new Error('captured rejection') });
+assert.throws(() => page.h.assertNoLeaks(), /captured rejection/);
+console.log('newPage fixture OK');

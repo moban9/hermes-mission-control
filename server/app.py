@@ -33,6 +33,7 @@ from fastapi.staticfiles import StaticFiles
 import db
 import discord
 import live
+import redact
 import reducer
 import retention
 import settings
@@ -225,7 +226,7 @@ async def _sse_gen():
     try:
         last_fp = await asyncio.to_thread(reducer.activity_fingerprint)
         state = await asyncio.to_thread(reducer.reduce_state)
-        yield _sse("snapshot", state)
+        yield _sse("snapshot", redact.scrub_obj(state))
 
         # Replay the current pending approvals so the panel populates on load.
         for ap in state.get("approvals", []):
@@ -252,7 +253,7 @@ async def _sse_gen():
             if fp != last_fp:
                 last_fp = fp
                 state = await asyncio.to_thread(reducer.reduce_state)
-                yield _sse("activity", state)
+                yield _sse("activity", redact.scrub_obj(state))
                 last_keepalive = time.time()
             elif time.time() - last_keepalive >= SSE_KEEPALIVE_S:
                 yield ": ping\n\n"
@@ -290,11 +291,11 @@ def v1_state(_auth: None = Depends(_auth)) -> dict:
     with STATE.lock:
         cached = STATE.latest
     if cached and (time.time() - cached["ts"]) < 2.0:
-        return cached["state"]
+        return redact.scrub_obj(cached["state"])
     state = reducer.reduce_state()
     with STATE.lock:
         STATE.latest = {"state": state, "ts": time.time()}
-    return state
+    return redact.scrub_obj(state)
 
 
 def _replay_projection(state: dict) -> dict:
@@ -341,7 +342,7 @@ def v1_snapshots(_auth: None = Depends(_auth)) -> dict:
             out.append(_replay_projection(json.loads(r["state_json"])))
         except Exception:
             continue
-    return {"snapshots": out}
+    return {"snapshots": redact.scrub_obj(out)}
 
 
 @app.get("/v1/stream")

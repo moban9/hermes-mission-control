@@ -1,0 +1,1438 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MC approvals corrected contract",
+    "version": "1.2.0",
+    "description": "Design only; supersedes conflicting approvals v1.0/v1.1 and park-resume v2 interface clauses. Status vocabulary: approvals-ux-v1.2.0-amendment.md#status-vocabulary"
+  },
+  "x-status-vocabulary": "approvals-ux-v1.2.0-amendment.md#status-vocabulary",
+  "x-redaction-required": [
+    "persist",
+    "API",
+    "SSE",
+    "notify"
+  ],
+  "paths": {
+    "/v1/approvals": {
+      "get": {
+        "operationId": "listApprovals",
+        "security": [
+          {
+            "ViewerBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "captured_at": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+                    },
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Approval"
+                      }
+                    },
+                    "approval_history": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Approval"
+                      }
+                    }
+                  },
+                  "required": [
+                    "seq",
+                    "captured_at",
+                    "approvals",
+                    "approval_history"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/state": {
+      "get": {
+        "operationId": "getState",
+        "security": [
+          {
+            "ViewerBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "approval_state"
+                  ],
+                  "properties": {
+                    "approval_state": {
+                      "$ref": "#/components/schemas/ApprovalState"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{identifier}": {
+      "get": {
+        "operationId": "getApproval",
+        "security": [
+          {
+            "ViewerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Identifier resolution in amendment: request_id exact first; otherwise decimal numeric compatibility alias. Unknown numeric alias 409; multiple matches 409; unknown nonnumeric request_id 404. Use ?id_kind=request_id for digit-only canonical IDs; ?id_kind=numeric_alias forces compatibility lookup."
+          },
+          {
+            "name": "id_kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "auto",
+                "request_id",
+                "numeric_alias"
+              ],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown canonical request_id"
+          }
+        }
+      },
+      "post": {
+        "operationId": "decideApproval",
+        "security": [
+          {
+            "OwnerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Identifier resolution in amendment: request_id exact first; otherwise decimal numeric compatibility alias. Unknown numeric alias 409; multiple matches 409; unknown nonnumeric request_id 404. Use ?id_kind=request_id for digit-only canonical IDs; ?id_kind=numeric_alias forces compatibility lookup."
+          },
+          {
+            "name": "id_kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "auto",
+                "request_id",
+                "numeric_alias"
+              ],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown canonical request_id"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{identifier}/seen": {
+      "post": {
+        "operationId": "markApprovalSeen",
+        "security": [
+          {
+            "OwnerBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Identifier resolution in amendment: request_id exact first; otherwise decimal numeric compatibility alias. Unknown numeric alias 409; multiple matches 409; unknown nonnumeric request_id 404. Use ?id_kind=request_id for digit-only canonical IDs; ?id_kind=numeric_alias forces compatibility lookup."
+          },
+          {
+            "name": "id_kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "auto",
+                "request_id",
+                "numeric_alias"
+              ],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown canonical request_id"
+          }
+        }
+      }
+    },
+    "/v1/approvals/{identifier}/cancel": {
+      "post": {
+        "operationId": "cancelApproval",
+        "security": [
+          {
+            "OwnerBearer": []
+          },
+          {
+            "IngestBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Identifier resolution in amendment: request_id exact first; otherwise decimal numeric compatibility alias. Unknown numeric alias 409; multiple matches 409; unknown nonnumeric request_id 404. Use ?id_kind=request_id for digit-only canonical IDs; ?id_kind=numeric_alias forces compatibility lookup."
+          },
+          {
+            "name": "id_kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "auto",
+                "request_id",
+                "numeric_alias"
+              ],
+              "default": "auto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown canonical request_id"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelInput"
+              }
+            }
+          }
+        },
+        "description": "Owner can withdraw; authenticated worker lifecycle identity may report worker_died only for its own request. Viewer forbidden. Enforce identity binding, not possession of arbitrary ingest token alone."
+      }
+    },
+    "/v1/approvals/{identifier}/wait": {
+      "get": {
+        "operationId": "waitApproval",
+        "security": [
+          {
+            "IngestBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Identifier resolution in amendment: request_id exact first; otherwise decimal numeric compatibility alias. Unknown numeric alias 409; multiple matches 409; unknown nonnumeric request_id 404. Use ?id_kind=request_id for digit-only canonical IDs; ?id_kind=numeric_alias forces compatibility lookup."
+          },
+          {
+            "name": "id_kind",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "auto",
+                "request_id",
+                "numeric_alias"
+              ],
+              "default": "auto"
+            }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown canonical request_id"
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "operationId": "ingestApprovalProfile",
+        "security": [
+          {
+            "IngestBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical redacted result; Status vocabulary and Redaction boundary apply.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "accepted": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "duplicates": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "accepted",
+                    "duplicates"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/IngestEvent"
+                  },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "$ref": "#/components/schemas/IngestEvent"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream": {
+      "get": {
+        "operationId": "streamState",
+        "security": [
+          {
+            "ViewerBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE protocol in amendment, Replay and parity; id decimal seq; event snapshot|activity|approval; data JSON envelope.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid identity"
+          },
+          "403": {
+            "description": "Insufficient scope"
+          },
+          "409": {
+            "description": "Conflict with explicit detail; existing approval returned on terminal conflict, never overwritten.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conflict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, atomic no writes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "description": "Stored global seq; malformed 422, missing retained cursor or future seq 409 replay_unavailable. Omit to reset via snapshot."
+          }
+        ],
+        "x-sse-events": {
+          "snapshot": {
+            "$ref": "#/components/schemas/SnapshotEvent"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/ActivityEvent"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalEvent"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OwnerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing owner identity; not any valid token."
+      },
+      "ViewerBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing viewer authentication including existing SSE transport; never persist credentials."
+      },
+      "IngestBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing scoped ingest identity with requester/worker binding for lifecycle writes."
+      }
+    },
+    "schemas": {
+      "Approval": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:onendo:approval-presentation:1.2.0",
+        "title": "Canonical Approval presentation 1.2.0",
+        "description": "Status vocabulary: approvals-ux-v1.2.0-amendment.md#status-vocabulary. All strings subject to Redaction boundary in amendment.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "summary",
+          "what_it_does",
+          "affects",
+          "reversible",
+          "detail",
+          "classification",
+          "needs_care",
+          "contract_version",
+          "expires_at",
+          "expiry_reason",
+          "request_id",
+          "status",
+          "requested_at",
+          "first_seen_at",
+          "decided_at",
+          "decided_by",
+          "terminal_reason",
+          "notification"
+        ],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^(?!\\s*$)(?!.*[\\r\\n\\x00-\\x1f`|])(?!.*(?:&&|<<|\\$\\(|\\$\\{)).+$",
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "what_it_does": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "affects": {
+            "type": "string",
+            "pattern": "^(repo|money|none|service:[^\\r\\n]+|files:[^\\r\\n]+)$",
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "read",
+              "read-only-test",
+              "repo-write",
+              "file-write",
+              "delete",
+              "process-control",
+              "service-control",
+              "permissions",
+              "network-write",
+              "dns-change",
+              "spend",
+              "unknown"
+            ]
+          },
+          "needs_care": {
+            "type": "boolean"
+          },
+          "contract_version": {
+            "const": "1.2.0"
+          },
+          "expires_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "expiry_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "cancelled",
+              "expired"
+            ],
+            "description": "Status vocabulary: approvals-ux-v1.2.0-amendment.md#status-vocabulary"
+          },
+          "requested_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "first_seen_at": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "terminal_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+          },
+          "notification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "claimed_at",
+              "attempted_at",
+              "suppression_reason",
+              "delivery_outcome"
+            ],
+            "properties": {
+              "claimed_at": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "attempted_at": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "suppression_reason": {
+                "enum": [
+                  null,
+                  "quiet_hours",
+                  "unconfigured"
+                ]
+              },
+              "delivery_outcome": {
+                "enum": [
+                  null,
+                  "sent",
+                  "failed"
+                ]
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "classification": {
+                  "const": "unknown"
+                }
+              },
+              "required": [
+                "classification"
+              ]
+            },
+            "then": {
+              "properties": {
+                "summary": {
+                  "const": "Unclassified action \u2014 inspect the detail"
+                },
+                "needs_care": {
+                  "const": true
+                },
+                "reversible": {
+                  "const": false
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "expired"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "expiry_reason": {
+                  "const": "Approval expired after 7 days without a decision."
+                },
+                "decided_at": {
+                  "type": "null"
+                },
+                "decided_by": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "pending",
+                    "cancelled",
+                    "expired"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "decided_at": {
+                  "type": "null"
+                },
+                "decided_by": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "approved",
+                    "denied"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "decided_at": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+                },
+                "decided_by": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "cancelled"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "terminal_reason": {
+                  "enum": [
+                    "requester_withdrew",
+                    "worker_died"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "pending",
+                    "approved",
+                    "denied",
+                    "cancelled"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "expiry_reason": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ],
+        "x-status-vocabulary": "approvals-ux-v1.2.0-amendment.md#status-vocabulary",
+        "x-redaction-required": [
+          "persist",
+          "API",
+          "SSE",
+          "notify"
+        ]
+      },
+      "Epoch": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+      },
+      "Conflict": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "unknown_numeric_alias",
+                  "ambiguous_numeric_alias",
+                  "already_terminal",
+                  "expired",
+                  "replay_unavailable"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Redacted explicit detail, no raw input echo."
+              },
+              "approval": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Approval"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "match_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "code",
+              "reason",
+              "approval",
+              "match_count"
+            ]
+          }
+        },
+        "required": [
+          "detail"
+        ]
+      },
+      "ValidationError": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "type": "string",
+            "description": "Redacted validation detail; no raw payload echo."
+          },
+          "written_rows": {
+            "const": 0
+          }
+        },
+        "required": [
+          "detail",
+          "written_rows"
+        ]
+      },
+      "ApprovalState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "captured_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "approvals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Approval"
+            }
+          },
+          "approval_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Approval"
+            }
+          }
+        },
+        "required": [
+          "seq",
+          "captured_at",
+          "approvals",
+          "approval_history"
+        ]
+      },
+      "Activity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "received_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Redacted plain-language summary; no raw command."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "received_at",
+          "summary"
+        ]
+      },
+      "SnapshotEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "captured_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApprovalState"
+          }
+        },
+        "required": [
+          "seq",
+          "captured_at",
+          "data"
+        ]
+      },
+      "ActivityEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "captured_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "data": {
+            "$ref": "#/components/schemas/Activity"
+          }
+        },
+        "required": [
+          "seq",
+          "captured_at",
+          "data"
+        ]
+      },
+      "ApprovalEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "captured_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "data": {
+            "$ref": "#/components/schemas/Approval"
+          }
+        },
+        "required": [
+          "seq",
+          "captured_at",
+          "data"
+        ]
+      },
+      "DecisionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "type": "string",
+            "description": "Accepted values defined exclusively in Status vocabulary / Input alias mapping. Normalize before canonical enum validation; only operator decision outcomes are valid."
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "CancelInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "enum": [
+              "requester_withdrew",
+              "worker_died"
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "IngestEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "enum": [
+              "approval.requested",
+              "activity"
+            ]
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "request_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "presentation": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "summary": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80,
+                        "pattern": "^(?!\\s*$)(?!.*[\\r\\n\\x00-\\x1f`|])(?!.*(?:&&|<<|\\$\\(|\\$\\{)).+$",
+                        "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+                      },
+                      "what_it_does": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500,
+                        "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+                      },
+                      "affects": {
+                        "type": "string",
+                        "pattern": "^(repo|money|none|service:[^\\r\\n]+|files:[^\\r\\n]+)$",
+                        "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+                      },
+                      "reversible": {
+                        "type": "boolean"
+                      },
+                      "detail": {
+                        "type": "string",
+                        "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+                      },
+                      "classification": {
+                        "type": "string",
+                        "enum": [
+                          "read",
+                          "read-only-test",
+                          "repo-write",
+                          "file-write",
+                          "delete",
+                          "process-control",
+                          "service-control",
+                          "permissions",
+                          "network-write",
+                          "dns-change",
+                          "spend",
+                          "unknown"
+                        ]
+                      },
+                      "needs_care": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "summary",
+                      "what_it_does",
+                      "affects",
+                      "reversible",
+                      "detail",
+                      "classification",
+                      "needs_care"
+                    ]
+                  }
+                },
+                "required": [
+                  "request_id",
+                  "presentation"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "summary"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "agent_id",
+          "session_id",
+          "data"
+        ],
+        "description": "For approval.requested data MUST match request_id/presentation branch; for activity data MUST match summary branch. Reject mismatch atomically. Unknown event types use existing separately versioned contracts, not this approval ingest profile."
+      }
+    }
+  }
+}

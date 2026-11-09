@@ -1,0 +1,7 @@
+Command: python3 docs/check-approvals-v1.2.0.py
+PASS grep-level status parity: prose/OpenAPI/SQL/presentation; alias confined to mapping
+PASS OpenAPI local refs, schema identity, SSE names, identifier responses and required acceptance cases
+PASS isolated SQLite DDL: append-only triggers, latest projection, cancellation not denial, terminal guard, unique immutable claim, ambiguous aliases retained
+PASS isolated SQL rollback: invalid batch fixture leaves zero new ledger rows
+LIMIT: no API/SSE/redaction/notification runtime implementation tested; A1-A12 remain mandatory downstream. Standard library only; no JSON Schema meta-validator installed.
+Exit code: 0

@@ -6,9 +6,9 @@
 <title>Onendo mission control</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-:root{--bg:#060914;--bg2:#0a1124;--panel:rgba(16,24,48,.72);--line:rgba(110,190,255,.16);--tx:#e8efff;--mu:#8a97b8;--cy:#4de1ff;--vi:#a58bff;--gr:#43f0b0;--am:#ffbd59;--rd:#ff5d7a;--glow:rgba(77,225,255,.18);
+:root{--bg:#060914;--bg2:#0a1124;--panel:rgba(16,24,48,.72);--line:rgba(110,190,255,.16);--tx:#e8efff;--mu:#8a97b8;--cy:#4de1ff;--vi:#a58bff;--gr:#43f0b0;--am:#ffbd59;--rd:#ff5d7a;--glow:rgba(77,225,255,.18);--orgnode:#141826;
 color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#eaf0fa;--bg2:#dfe8f7;--panel:rgba(255,255,255,.8);--line:rgba(30,70,140,.16);--tx:#0e1a33;--mu:#566383;--cy:#0a8fb3;--vi:#6a4fd8;--gr:#0c9a68;--am:#b97300;--rd:#d2314f;--glow:rgba(10,143,179,.12);color-scheme:light}}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#eaf0fa;--bg2:#dfe8f7;--panel:rgba(255,255,255,.8);--line:rgba(30,70,140,.16);--tx:#0e1a33;--mu:#566383;--cy:#0a8fb3;--vi:#6a4fd8;--gr:#0c9a68;--am:#b97300;--rd:#d2314f;--glow:rgba(10,143,179,.12);--orgnode:#f7faff;color-scheme:light}}
 :root[data-theme="dark"]{color-scheme:dark}
 *{box-sizing:border-box;margin:0}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -175,7 +175,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
    a single column with details under the tree. (The old flexbox
    .org-row/.org-teams rules were dead once the chart moved to SVG; removed
    here.) */
-.org{--orgnode:#141826;grid-column:1/-1}
+.org{grid-column:1/-1}
 .org-body{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px}
 #orgChart{flex:6 1 480px;min-width:0;overflow:auto;max-height:min(60vh,560px)}
 #orgChart svg{display:block}
@@ -519,11 +519,11 @@ function drawOrg(){
     var role=(cls==="ceo"?"CEO":(LEADS.indexOf(name)>=0?{"kestrel":"Ops","atlas":"Data","keystone":"Build","keel":"Platform"}[name]:(a.r||"")));
     var dot={running:"#2f9e5f",thinking:"#2f9e5f",waiting:"#ffbd59",offline:"#5a6172"}[st]||"#5a6172";
     return '<g class="onode '+st+'" data-agent="'+name+'" style="cursor:pointer">'+
-      '<rect x="'+x+'" y="'+yy+'" width="'+NW+'" height="'+NH+'" rx="9" fill="#141826" stroke="'+
-        (cls==="ceo"?"#6a4fd8":cls==="lead"?"rgba(106,79,216,.55)":"#232838")+'" stroke-width="1.2"/>'+
+      '<rect x="'+x+'" y="'+yy+'" width="'+NW+'" height="'+NH+'" rx="9" fill="var(--orgnode)" stroke="'+
+        (cls==="ceo"?"#6a4fd8":cls==="lead"?"rgba(106,79,216,.55)":"var(--line)")+'" stroke-width="1.2"/>'+
       '<circle cx="'+(x+13)+'" cy="'+(yy+18)+'" r="3.6" fill="'+dot+'"/>'+
-      '<text x="'+(x+22)+'" y="'+(yy+15)+'" fill="#e6e8ee" font-size="12" font-weight="600">'+name+'</text>'+
-      '<text x="'+(x+22)+'" y="'+(yy+29)+'" fill="#9aa3b8" font-size="11">'+String(role).slice(0,24)+(run?" \u00b7 "+run+" running":"")+'</text>'+
+      '<text x="'+(x+22)+'" y="'+(yy+15)+'" fill="var(--tx)" font-size="12" font-weight="600">'+name+'</text>'+
+      '<text x="'+(x+22)+'" y="'+(yy+29)+'" fill="var(--mu)" font-size="11">'+String(role).slice(0,24)+(run?" \u00b7 "+run+" running":"")+'</text>'+
     '</g>';
   }
   function elbow(px,py,cx,cy){

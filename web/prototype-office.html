@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Onendo Office — PROTOTYPE (static, fake data)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#30363d; --ink:#e6edf3; --dim:#8b949e;
+    --ok:#3fb950; --run:#58a6ff; --block:#f85149; --review:#d29922; --idle:#484f58;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:14px;margin:0;font-weight:700;letter-spacing:.04em}
+  .tag{font-size:10px;padding:2px 7px;border:1px solid var(--review);color:var(--review);border-radius:999px;letter-spacing:.08em}
+  .clock{margin-left:auto;color:var(--dim);font-size:11px}
+  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:0;height:calc(100vh - 47px)}
+  #stage{position:relative;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
+  aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:12px 14px}
+  aside h2{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin:16px 0 7px}
+  aside h2:first-child{margin-top:0}
+  .row{display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px dotted #21262d}
+  .row b{font-weight:600}
+  .k{color:var(--dim)}
+  .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;padding:8px 16px;border-top:1px solid var(--line);background:var(--panel);font-size:11px;color:var(--dim)}
+  .legend span{display:flex;align-items:center;gap:5px}
+  code{color:#a5d6ff;font-size:11px}
+  .note{margin-top:10px;padding:8px;border:1px dashed var(--line);border-radius:6px;color:var(--dim);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1>ONENDO OFFICE</h1>
+  <span class="tag">PROTOTYPE · FAKE DATA</span>
+  <span class="clock" id="clock">--:--:-- WIB</span>
+</header>
+
+<div class="wrap">
+  <div id="stage"><canvas id="cv"></canvas></div>
+  <aside>
+    <h2>What you're looking at</h2>
+    <div class="note">Top-down floor. Each bot has a desk in its team row. The figure's
+      position and animation are driven by its <b>live task status</b>, not by a scheduler.</div>
+
+    <h2>State → visual</h2>
+    <div class="row"><span class="sw" style="background:var(--idle)"></span><b>idle</b> — at desk, screen dark</div>
+    <div class="row"><span class="sw" style="background:var(--run)"></span><b>working</b> — typing, screen glow, sandbox noise</div>
+    <div class="row"><span class="sw" style="background:var(--review)"></span><b>review</b> — walks to the review table</div>
+    <div class="row"><span class="sw" style="background:var(--block)"></span><b>blocked</b> — red beacon above desk</div>
+    <div class="row"><span class="sw" style="background:var(--ok)"></span><b>done</b> — green tick, brief celebration</div>
+
+    <h2>Where the data comes from</h2>
+    <div class="row"><span class="k">bot list</span><span>agents[]</span></div>
+    <div class="row"><span class="k">status</span><span>agents[].running / blocked</span></div>
+    <div class="row"><span class="k">current task</span><span>pipeline[].milestones[]</span></div>
+    <div class="row"><span class="k">assignee</span><span>milestone.assignee</span></div>
+    <div class="row"><span class="k">root task</span><span>pipeline[].title (v1.0.2)</span></div>
+
+    <h2>Cost</h2>
+    <div class="row"><span class="k">rendering</span><span>1 canvas, no assets</span></div>
+    <div class="row"><span class="k">new service</span><span>none (same page)</span></div>
+    <div class="row"><span class="k">payload</span><span>reuses /v1/state</span></div>
+
+    <h2>Open questions for Randy</h2>
+    <div class="note">1. Sprite density: 16 desks visible at once, or collapse by team?<br>
+      2. Should idle bots wander, or stay seated (less distracting)?<br>
+      3. Emergent milestones: should a bot visibly <i>walk over</i> to the lead's desk?</div>
+  </aside>
+</div>
+
+<div class="legend">
+  <span><span class="sw" style="background:var(--run)"></span>working</span>
+  <span><span class="sw" style="background:var(--review)"></span>reviewing</span>
+  <span><span class="sw" style="background:var(--block)"></span>blocked</span>
+  <span><span class="sw" style="background:var(--ok)"></span>done</span>
+  <span><span class="sw" style="background:var(--idle)"></span>idle</span>
+  <span style="margin-left:auto">prototype only — no live data, nothing here is wired to the board</span>
+</div>
+
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const ZOOM = 4;                 // pixel scale
+const W = 200, H = 130;         // logical pixels
+
+// team rows: y of desk row
+const TEAMS = [
+  {name:'BUILD',    y:22, bots:['keystone','piston']},
+  {name:'DATA',     y:46, bots:['atlas','meridian','cask','vera','prism','seal']},
+  {name:'OPS',      y:70, bots:['kestrel','sable','quill','byline','ledger']},
+  {name:'PLATFORM', y:94, bots:['keel','nimbus','relay']},
+];
+
+// fake live state (this is what /v1/state would supply)
+const STATES = ['idle','working','working','review','blocked','done'];
+const state = {};
+let i = 0;
+TEAMS.forEach(t => t.bots.forEach(b => { state[b] = STATES[(i++) % STATES.length]; }));
+const TASKS = {
+  keystone:'spec v1.0.2', piston:'build panel', atlas:'gold layer', meridian:'contract review',
+  cask:'dbt models', vera:'NPL analysis', prism:'dashboard', seal:'quarantine rules',
+  kestrel:'runbook', sable:'research', quill:'docs', byline:'changelog', ledger:'operator guide',
+  keel:'infra', nimbus:'TCO', relay:'drift alerts'
+};
+const COLORS = {idle:'#484f58', working:'#58a6ff', review:'#d29922', blocked:'#f85149', done:'#3fb950'};
+
+let tick = 0;
+function resize(){
+  cv.width = W*ZOOM; cv.height = H*ZOOM;
+  ctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', resize); resize();
+
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x*ZOOM,y*ZOOM,w*ZOOM,h*ZOOM); }
+
+function drawFloor(){
+  px(0,0,W,H,'#0b0f14');
+  // carpet bands per team
+  TEAMS.forEach((t,idx)=>{
+    px(4, t.y-12, W-8, 20, idx%2 ? '#12181f' : '#0f151b');
+  });
+  // walls
+  px(2,2,W-4,1,'#21262d'); px(2,H-3,W-4,1,'#21262d');
+  // review table (amber zone) bottom right
+  px(150, 112, 40, 12, '#161d26');
+  px(151, 113, 38, 1, '#d29922');
+  px(160, 116, 20, 3, '#2b333d');   // table
+}
+
+function drawDesk(x, y){
+  px(x,   y,   12, 1, '#2b333d');   // desk top
+  px(x,   y+1, 1, 4, '#21262d');
+  px(x+11,y+1, 1, 4, '#21262d');
+  px(x+3, y-3, 5, 3, '#0d1117');    // monitor
+}
+
+function drawBot(x, y, st, phase){
+  const body = COLORS[st];
+  const bob = (st==='working' && (tick+phase)%6<3) ? 1 : 0;
+  // shadow
+  px(x+2, y+7, 6, 1, '#05080b');
+  // legs
+  px(x+3, y+5+bob, 1, 2, '#30363d'); px(x+6, y+5+bob, 1, 2, '#30363d');
+  // torso
+  px(x+2, y+2+bob, 6, 3, body);
+  // head
+  px(x+3, y+0+bob, 4, 2, '#c9d1d9');
+  // screen glow when working
+  if (st==='working') px(x+4, y-2, 3, 1, '#58a6ff');
+  if (st==='blocked'){ px(x+4, y-5, 1, 2, '#f85149'); px(x+4, y-3, 1, 1, '#f85149'); }
+  if (st==='done')    px(x+9, y-1, 2, 1, '#3fb950');
+  if (st==='review')  px(x+9, y+1, 1, 1, '#d29922');
+}
+
+function label(x, y, text, colour){
+  ctx.save();
+  ctx.font = '5px ui-monospace,monospace';
+  ctx.fillStyle = colour;
+  ctx.textBaseline = 'top';
+  ctx.fillText(text, x*ZOOM, y*ZOOM);
+  ctx.restore();
+}
+
+function frame(){
+  tick++;
+  drawFloor();
+  TEAMS.forEach((t, ri)=>{
+    label(6, t.y-10, t.name, '#30363d');
+    t.bots.forEach((bot, bi)=>{
+      const x = 18 + bi*15;
+      const st = state[bot];
+      // a 'review' bot walks toward the review table
+      let bx = x, by = t.y-6;
+      if (st==='review'){
+        const k = (tick%40)/40;
+        bx = x + (168-x)*k;
+        by = (t.y-6) + (114-(t.y-6))*k;
+      }
+      drawDesk(x, t.y-1);
+      drawBot(Math.round(bx), Math.round(by), st, bi);
+      label(x, t.y+6, bot.slice(0,7), st==='idle' ? '#484f58' : '#8b949e');
+    });
+  });
+  // ambient dust so the room doesn't look frozen
+  for (let d=0; d<6; d++){
+    const dx = (tick*0.7 + d*37) % W, dy = 10 + ((d*23)%100);
+    px(Math.round(dx), Math.round(dy), 1, 1, '#1b2330');
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+
+function clockWIB(){
+  const now = new Date();
+  const wib = new Date(now.getTime() + (now.getTimezoneOffset()*60000) + 7*3600000);
+  document.getElementById('clock').textContent =
+    wib.toTimeString().slice(0,8) + ' WIB';
+}
+clockWIB(); setInterval(clockWIB, 1000);
+</script>
+</body>
+</html>

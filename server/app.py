@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import html
 import os
 import threading
 import time
@@ -230,7 +231,7 @@ async def _sse_gen():
 
         # Replay the current pending approvals so the panel populates on load.
         for ap in state.get("approvals", []):
-            yield _sse("approval", _approval_sse(ap))
+            yield _sse("approval", redact.scrub_obj(_approval_sse(ap)))
 
         last_keepalive = time.time()
         while True:
@@ -241,7 +242,7 @@ async def _sse_gen():
                     ev, data = q.get_nowait()
                 except asyncio.QueueEmpty:
                     break
-                yield _sse(ev, data)
+                yield _sse(ev, redact.scrub_obj(data) if ev == "approval" else data)
                 drained = True
             if drained:
                 last_keepalive = time.time()
@@ -593,7 +594,7 @@ def v1_agents_stuck_resolve(body: dict | None = Body(default=None),
 @app.get("/v1/approvals")
 def v1_approvals(_auth: None = Depends(_auth)) -> dict:
     """Pending approvals (viewer auth)."""
-    return {"approvals": db.list_pending_approvals()}
+    return redact.scrub_obj({"approvals": db.list_pending_approvals()})
 
 
 def _log_decision(identifier: str, status: str, decided_by: str,
@@ -635,7 +636,7 @@ def v1_approval_decide(identifier: str, body: dict = Body(...),
 
     live.bump()  # fold into the SSE activity fingerprint
     broadcast_sse("approval", _approval_sse(updated))
-    return updated
+    return redact.scrub_obj(updated)
 
 
 _APPROVE_WORDS = ("approve", "approved", "yes")
@@ -652,7 +653,7 @@ def _decision_page(message: str, ok: bool, code: int = 200) -> HTMLResponse:
         "display:flex;align-items:center;justify-content:center;height:100vh;margin:0'>"
         "<div style='text-align:center;padding:24px'>"
         f"<div style='font-size:52px'>{glyph}</div>"
-        f"<div style='color:{color};font-size:22px;max-width:480px'>{message}</div>"
+        f"<div style='color:{color};font-size:22px;max-width:480px'>{html.escape(redact.scrub_text(message))}</div>"
         "</div></body>"
     )
     return HTMLResponse(body, status_code=code)
@@ -667,6 +668,7 @@ def v1_approval_decide_confirm(identifier: str, decision: str = Query(...),
     fetch links automatically, and an earlier version let the unfurl bot
     approve requests seconds after they were posted.
     """
+    # Legacy signed GET is retained for compatibility; never log or echo the URL.
     raw = (decision or "").strip().lower()
     if raw not in _APPROVE_WORDS and raw not in _DENY_WORDS:
         return _decision_page("Decision must be 'approved' or 'denied'.",
@@ -676,22 +678,28 @@ def v1_approval_decide_confirm(identifier: str, decision: str = Query(...),
 
     ap = db.get_approval(identifier) or {}
     label = "Approve" if raw in _APPROVE_WORDS else "Deny"
+    safe_identifier = html.escape(redact.scrub_text(identifier), quote=True)
+    safe_label = html.escape(redact.scrub_text(label), quote=True)
+    safe_agent = html.escape(redact.scrub_text(str(ap.get("agent", ""))), quote=True)
+    safe_action = html.escape(redact.scrub_text(str(ap.get("action", "") or "(no action recorded)")), quote=True)
+    safe_sig = html.escape(redact.scrub_text(sig), quote=True)
+    safe_raw = html.escape(redact.scrub_text(raw), quote=True)
     body = f"""<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{label} this action?</title>
+<title>{safe_label} this action?</title>
 <style>body{{font:15px/1.5 system-ui;background:#0b0e17;color:#e6e8ee;display:grid;
 place-items:center;height:100vh;margin:0}}form{{background:#151926;padding:28px;border-radius:16px;
 border:1px solid #6a4fd8;max-width:460px;width:calc(100% - 32px)}}
 b{{color:#9be7ff}}button{{margin-top:18px;padding:11px 20px;border-radius:10px;border:0;
 background:{'#2f9e5f' if label=='Approve' else '#c0392b'};color:#fff;font:600 15px system-ui;
 cursor:pointer}}</style>
-<form method="post" action="/v1/approvals/{identifier}/decide">
-<h2 style="margin:0 0 10px">{label} this action?</h2>
-<div>Agent: <b>{ap.get('agent','')}</b></div>
-<div style="margin-top:6px;word-break:break-word">{ap.get('action','') or '(no action recorded)'}</div>
-<input type="hidden" name="decision" value="{raw}">
-<input type="hidden" name="sig" value="{sig}">
-<button type="submit">{label}</button>
+<form method="post" action="/v1/approvals/{safe_identifier}/decide">
+<h2 style="margin:0 0 10px">{safe_label} this action?</h2>
+<div>Agent: <b>{safe_agent}</b></div>
+<div style="margin-top:6px;word-break:break-word">{safe_action}</div>
+<input type="hidden" name="decision" value="{safe_raw}">
+<input type="hidden" name="sig" value="{safe_sig}">
+<button type="submit">{safe_label}</button>
 </form>"""
     return HTMLResponse(body)
 
@@ -727,8 +735,8 @@ async def v1_approval_decide(identifier: str, request: Request) -> HTMLResponse:
     live.bump()
     broadcast_sse("approval", _approval_sse(updated))
     label = "Approved" if status == "approved" else "Denied"
-    return _decision_page(f"{label} \u2014 {updated.get('agent','')} {updated.get('action','')}",
-                          ok=True)
+    result = f"{label} \u2014 {updated.get('agent','')} {updated.get('action','')}"
+    return _decision_page(result, ok=True)
 
 
 @app.get("/v1/approvals/{request_id}/wait")

@@ -1,0 +1,12 @@
+PASS artifact parity, status/alias confinement, local refs, page/state separation, 405/415 and explicit signed hold
+EVIDENCE inspected scrubber SHA256 80fb3af31234ba26883e037f64946d366336f8b7f95a3fd16318dcfb6a9e5b36
+PASS all four terminal statuses: same-status field tampering, direct UPDATE/DELETE, allowed first-seen once; immutable claim generated
+PASS snapshot/projection equality and atomic rollback of history + generated claim + audit
+PASS distinct immutable notification stages: quiet suppression, attempt, outcome, no reset/retry, crash/uncertainty, terminal reservation race
+PASS representative persistence safety-hook fixtures, unsafe key/nested/identity/boolean rejection; missing hook fails closed
+PASS duplicate JSON keys, character/UTF-8 byte limits, and immutable delayed result after terminal decision
+PASS 101 pending fixture: bounded snapshot 100, truncation flag, full latest ledger 101 retained
+CAPACITY decimal bytes: {'per_event': 1720000, 'baseline_daily': 1720000000, 'ten_x_daily': 17200000000, 'ten_x_30_days': 516000000000}
+PASS expected SQL rejections: 151
+LIMIT: design fixtures only, scoped schema assertion evaluator not meta-validator, existing scrubber representative classes only; no actual API/SSE/log/notification runtime, full-policy canaries, pagination handler, Bronze consumer or performance/restore benchmark executed. A1–A12 and independent reviews remain gates.
+Schema meta-validator availability: jsonschema not installed; no dependencies added.

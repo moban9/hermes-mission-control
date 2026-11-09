@@ -1,0 +1,523 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:onendo:approval-presentation:1.3.0",
+  "title": "Canonical Approval presentation 1.3.0",
+  "description": "Status vocabulary: approvals-ux-v1.3.0-amendment.md#status-vocabulary. All strings subject to Redaction boundary in amendment.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "what_it_does",
+    "affects",
+    "reversible",
+    "detail",
+    "classification",
+    "needs_care",
+    "contract_version",
+    "expires_at",
+    "expiry_reason",
+    "request_id",
+    "status",
+    "requested_at",
+    "first_seen_at",
+    "decided_at",
+    "decided_by",
+    "terminal_reason",
+    "notification",
+    "terminal_at"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^(?!\\s*$)(?!.*[\\r\\n\\u0000-\\u001f`|])(?!.*(?:&&|<<|\\$\\(|\\$\\{)).+$",
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+    },
+    "what_it_does": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+    },
+    "affects": {
+      "type": "string",
+      "pattern": "^(repo|money|none|service:[^\\r\\n]+|files:[^\\r\\n]+)$",
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+    },
+    "reversible": {
+      "type": "boolean"
+    },
+    "detail": {
+      "type": "string",
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. ",
+      "maxLength": 4096
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "read",
+        "read-only-test",
+        "repo-write",
+        "file-write",
+        "delete",
+        "process-control",
+        "service-control",
+        "permissions",
+        "network-write",
+        "dns-change",
+        "spend",
+        "unknown"
+      ]
+    },
+    "needs_care": {
+      "type": "boolean"
+    },
+    "contract_version": {
+      "const": "1.3.0"
+    },
+    "expires_at": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+    },
+    "expiry_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "denied",
+        "cancelled",
+        "expired"
+      ],
+      "description": "Status vocabulary: approvals-ux-v1.3.0-amendment.md#status-vocabulary"
+    },
+    "requested_at": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+    },
+    "first_seen_at": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decided_at": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decided_by": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+    },
+    "terminal_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Normative Redaction boundary: scrub before persistence and again before API/SSE/notify; schema string validation is insufficient. "
+    },
+    "notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimed_at",
+        "attempted_at",
+        "suppression_reason",
+        "delivery_outcome",
+        "failure_reason"
+      ],
+      "properties": {
+        "claimed_at": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Finite server Unix epoch seconds; strict JSON numeric type, not boolean."
+        },
+        "attempted_at": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suppression_reason": {
+          "enum": [
+            null,
+            "quiet_hours",
+            "unconfigured",
+            "already_terminal"
+          ]
+        },
+        "delivery_outcome": {
+          "enum": [
+            null,
+            "sent",
+            "failed"
+          ]
+        },
+        "failure_reason": {
+          "enum": [
+            null,
+            "transport_error",
+            "timeout",
+            "uncertain_delivery",
+            "crash_before_attempt"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "attempted_at": {
+              "type": "null"
+            },
+            "suppression_reason": {
+              "type": "null"
+            },
+            "delivery_outcome": {
+              "type": "null"
+            },
+            "failure_reason": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "attempted_at": {
+              "type": "null"
+            },
+            "suppression_reason": {
+              "enum": [
+                "quiet_hours",
+                "unconfigured",
+                "already_terminal"
+              ]
+            },
+            "delivery_outcome": {
+              "type": "null"
+            },
+            "failure_reason": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "attempted_at": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Finite server Unix epoch seconds; strict JSON numeric type, not boolean."
+            },
+            "suppression_reason": {
+              "type": "null"
+            },
+            "delivery_outcome": {
+              "type": "null"
+            },
+            "failure_reason": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "attempted_at": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Finite server Unix epoch seconds; strict JSON numeric type, not boolean."
+            },
+            "suppression_reason": {
+              "type": "null"
+            },
+            "delivery_outcome": {
+              "const": "sent"
+            },
+            "failure_reason": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "attempted_at": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Finite server Unix epoch seconds; strict JSON numeric type, not boolean."
+            },
+            "suppression_reason": {
+              "type": "null"
+            },
+            "delivery_outcome": {
+              "const": "failed"
+            },
+            "failure_reason": {
+              "enum": [
+                "transport_error",
+                "timeout",
+                "uncertain_delivery"
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "attempted_at": {
+              "type": "null"
+            },
+            "suppression_reason": {
+              "type": "null"
+            },
+            "delivery_outcome": {
+              "const": "failed"
+            },
+            "failure_reason": {
+              "const": "crash_before_attempt"
+            }
+          }
+        }
+      ]
+    },
+    "terminal_at": {
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "description": "Finite server Unix epoch seconds; strict JSON numeric type, not boolean."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "summary": {
+            "const": "Unclassified action \u2014 inspect the detail"
+          },
+          "needs_care": {
+            "const": true
+          },
+          "reversible": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "expired"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "expiry_reason": {
+            "const": "Approval expired after 7 days without a decision."
+          },
+          "decided_at": {
+            "type": "null"
+          },
+          "decided_by": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "pending",
+              "cancelled",
+              "expired"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decided_at": {
+            "type": "null"
+          },
+          "decided_by": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "approved",
+              "denied"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decided_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite Unix epoch seconds from server clock; never milliseconds, ISO text or client clock."
+          },
+          "decided_by": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "cancelled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "terminal_reason": {
+            "enum": [
+              "requester_withdrew",
+              "worker_died"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "cancelled"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "expiry_reason": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "pending"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "terminal_at": {
+            "type": "null"
+          },
+          "terminal_reason": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "terminal_at": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Finite server Unix epoch seconds; strict JSON numeric type, not boolean."
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "approved",
+              "denied",
+              "expired"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "terminal_reason": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "x-status-vocabulary": "approvals-ux-v1.3.0-amendment.md#status-vocabulary",
+  "x-redaction-required": [
+    "persist",
+    "API",
+    "SSE",
+    "notify"
+  ],
+  "x-write-boundary": "redaction-contract-v1.1.0.md#3-credential-bearing-write-surfaces--ceo-adopted-addendum"
+}

@@ -260,8 +260,12 @@ def reduce_task_filters(now: float | None = None, path: str | None = None) -> di
     now = time.time() if now is None else now
     categories = {k: {"count": None, "total": None, "omitted": None, "rows": []}
                   for k in ("running", "done", "failed", "blocked")}
+    null_kpi = {"tasks_total": None, "tasks_queued": None, "tasks_running": None,
+                "tasks_done": None, "tasks_blocked": None, "tasks_failed": None,
+                "success_rate": None}
     result = {"available": False, "categories": categories, "failures": [],
-              "failures_omitted": None, "failures_error": "board unavailable: read_error"}
+              "failures_omitted": None, "failures_error": "board unavailable: read_error",
+              "tasks": [], "task_kpi": null_kpi}
     path = path or db.KANBAN_DB
     try:
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=.2)
@@ -269,9 +273,15 @@ def reduce_task_filters(now: float | None = None, path: str | None = None) -> di
         con.execute("PRAGMA query_only=ON")
         con.execute("BEGIN")
         required = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if not {"tasks", "task_runs", "task_events"} <= required:
+        if not {"tasks", "task_runs", "task_events", "task_links"} <= required:
             raise ValueError("schema_mismatch")
-        tasks = con.execute("SELECT id,title,assignee,status,block_kind,current_step_key,started_at,completed_at FROM tasks").fetchall()
+        tasks = con.execute("""
+            SELECT id,title,assignee,status,block_kind,current_step_key,started_at,completed_at,
+                   priority,created_at,consecutive_failures,
+                   (SELECT group_concat(parent_id) FROM task_links WHERE child_id=tasks.id) AS parent_ids,
+                   (SELECT COUNT(*) FROM task_links WHERE parent_id=tasks.id) AS child_count
+            FROM tasks ORDER BY created_at DESC
+        """).fetchall()
         runs = con.execute("SELECT id,task_id,profile,outcome,error,started_at,ended_at,summary FROM task_runs ORDER BY id").fetchall()
         events = con.execute("SELECT id,task_id,kind,payload,created_at FROM task_events WHERE kind='blocked' ORDER BY id").fetchall()
         con.commit()
@@ -292,22 +302,39 @@ def reduce_task_filters(now: float | None = None, path: str | None = None) -> di
     blocked_events = {}
     for event in events: blocked_events[event["task_id"]] = event
     rows = {k: [] for k in categories}
+    projected_tasks = []
+    task_kpi = {"tasks_total": 0, "tasks_queued": 0, "tasks_running": 0,
+                "tasks_done": 0, "tasks_blocked": 0, "tasks_failed": 0}
+    queued_statuses = {"todo", "ready", "triage", "scheduled"}
     failed_outcomes = {"crashed", "gave_up", "timed_out", "failed", "rate_limited"}
     for task in tasks:
         t = dict(task); status = t["status"] or ""; history = by_task.get(t["id"], [])
+        projected_tasks.append({
+            "id": t["id"], "title": t["title"], "assignee": t["assignee"], "status": status,
+            "priority": t["priority"], "created_at": t["created_at"],
+            "started_at": t["started_at"], "completed_at": t["completed_at"],
+            "block_kind": t["block_kind"], "parent_id": t["parent_ids"],
+            "child_count": t["child_count"] or 0,
+        })
+        task_kpi["tasks_total"] += 1
+        task_kpi["tasks_queued"] += status in queued_statuses
+        task_kpi["tasks_running"] += status == "running"
+        task_kpi["tasks_done"] += status == "done"
+        task_kpi["tasks_blocked"] += status == "blocked"
         latest = history[-1] if history else None
         outcome = latest["outcome"] if latest else None
-        base = {"task_id": t["id"], "title": t["title"], "assignee": t["assignee"], "status": status,
+        is_failed = status not in {"done", "archived"} and latest and outcome in failed_outcomes
+        task_kpi["tasks_failed"] += bool(is_failed)
+        base = {"task_id": t["id"], "title": t["title"], "assignee": t["assignee"] or "Unassigned", "status": status,
                 "blocked_kind": t["block_kind"], "current_step_key": t["current_step_key"],
                 "latest_run_id": latest["id"] if latest else None, "latest_outcome": outcome,
                 "profile": latest["profile"] if latest else None, "attempts": len(history),
                 "outcome_attempts": sum(1 for r in history if outcome is not None and r["outcome"] == outcome),
                 "error": latest["error"] if latest else None,
-                "reason": latest["error"] if latest and latest["error"] else None,
-                "blocked_reason": None, "started_at": None, "ended_at": None, "timestamp": None}
-        if latest:
-            base["started_at"] = latest["started_at"]
-            base["ended_at"] = latest["ended_at"]
+                "reason": latest["error"] if latest and isinstance(latest["error"], str) and latest["error"].strip() else "no reason recorded",
+                "label": (f"{outcome} ×{sum(1 for r in history if outcome is not None and r['outcome'] == outcome)} · {len(history)} attempts" if outcome is not None else f"no outcome · {len(history)} attempts"),
+                "blocked_reason": "no reason recorded", "started_at": latest["started_at"] if latest else None,
+                "ended_at": latest["ended_at"] if latest else None, "timestamp": None}
         if status == "running":
             base["timestamp"] = (latest["started_at"] if latest else None) or t["started_at"]
             rows["running"].append(dict(base))
@@ -315,23 +342,30 @@ def reduce_task_filters(now: float | None = None, path: str | None = None) -> di
             base["timestamp"] = t["completed_at"] or (latest["ended_at"] if latest and outcome == "completed" else None)
             rows["done"].append(dict(base))
         if status == "blocked":
-            base["timestamp"] = blocked_events.get(t["id"], {}).get("created_at") if isinstance(blocked_events.get(t["id"]), dict) else (blocked_events.get(t["id"])["created_at"] if blocked_events.get(t["id"]) else None)
             ev = blocked_events.get(t["id"])
+            base["timestamp"] = ev["created_at"] if ev else None
             if ev:
                 try:
                     payload = json.loads(ev["payload"] or "{}")
-                    base["blocked_reason"] = payload.get("reason") if isinstance(payload, dict) else None
-                except Exception: pass
+                    reason = payload.get("reason") if isinstance(payload, dict) else None
+                    if isinstance(reason, str) and reason.strip():
+                        base["blocked_reason"] = reason
+                except (TypeError, ValueError):
+                    pass
             rows["blocked"].append(dict(base))
-        if status not in {"done", "archived"} and latest and outcome in failed_outcomes:
+        if is_failed:
             base["timestamp"] = latest["ended_at"]
             rows["failed"].append(dict(base))
+    denom = task_kpi["tasks_done"] + task_kpi["tasks_failed"]
+    task_kpi["success_rate"] = round(task_kpi["tasks_done"] * 100.0 / denom, 1) if denom else None
     for key, items in rows.items():
         items.sort(key=lambda r: (r["timestamp"] is None, -(r["timestamp"] or 0), str(r["task_id"])))
         total = len(items); shown = items[:20]
         categories[key] = {"count": len(shown), "total": total, "omitted": total-len(shown), "rows": shown}
     result.update({"available": True, "categories": categories, "failures": categories["failed"]["rows"],
-                   "failures_omitted": categories["failed"]["omitted"], "failures_error": None})
+                   "failures_omitted": categories["failed"]["omitted"], "failures_error": None,
+                   "tasks": projected_tasks, "task_kpi": task_kpi,
+                   "empty": not bool(projected_tasks)})
     return result
 
 

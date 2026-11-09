@@ -184,6 +184,9 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
    here.) */
 .org{grid-column:1/-1}
 .org-body{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px}
+#orgEmptyFallback{display:none;position:relative;z-index:2;flex-basis:100%;min-width:0;color:var(--mu);font-size:13px}
+#orgEmptyFallback.visible{display:block}
+.org-body{width:100%;min-width:0}
 #orgChart{flex:6 1 480px;min-width:0;overflow:auto;max-height:min(60vh,560px)}
 #orgChart svg{display:block}
 .onode{cursor:pointer}
@@ -192,9 +195,14 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 #orgDetail{flex:4 1 300px;min-width:280px;align-self:flex-start;background:var(--orgnode);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 #orgDetail.empty{color:var(--mu);font-size:12px}
 #orgDetail .k{color:var(--mu);display:inline-block;min-width:82px;margin-right:8px}
-@media(max-width:1080px){.org-body{flex-direction:column;align-items:stretch}#orgChart{flex:1 1 auto;min-width:0}#orgDetail{flex:1 1 auto;min-width:0}}
+@media(max-width:1080px){.org-body{flex-direction:column;align-items:stretch}#orgChart{flex:1 1 auto;width:100%;max-width:100%;min-width:0}#orgDetail{flex:1 1 auto;min-width:0}}
 
 #taskPipelinePanel .pipeline-row{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin:8px 0;background:var(--panel)}
+#taskPipelineBody{height:min(62vh,620px);max-height:min(62vh,620px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--cy) var(--bg2);padding:4px 6px;margin:-4px -6px}
+#taskPipelineBody::-webkit-scrollbar{width:8px}
+#taskPipelineBody::-webkit-scrollbar-track{background:var(--bg2)}
+#taskPipelineBody::-webkit-scrollbar-thumb{background:var(--cy);border-radius:8px}
+#taskPipelineBody:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
 #taskPipelinePanel .pipeline-row.has-blocked{border-left:3px solid var(--rd)}
 #taskPipelinePanel .pipeline-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 #taskPipelinePanel .pipeline-title{font-weight:700;color:var(--tx)}
@@ -240,12 +248,13 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
   <section class="card org">
     <h2>Org structure <small>Click a name for details</small></h2>
     <div class="org-body">
+      <div id="orgEmptyFallback" aria-live="polite"></div>
       <div id="orgChart"></div>
       <div id="orgDetail" class="empty">Select an agent to see model, spend, session and recent work.</div>
     </div>
   </section>
 
-  <section class="card n12" id="taskPipelinePanel"><h2>Task pipeline</h2><div id="taskPipelineBody"></div></section>
+  <section class="card n12" id="taskPipelinePanel"><h2>Task pipeline</h2><div id="taskPipelineBody" tabindex="0" role="region" aria-label="Task pipeline"></div></section>
 
   <section class="card logs" id="logsCard">
     <h2 id="logsHead" title="Click to collapse or expand" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)">
@@ -450,13 +459,13 @@ function wireTaskApprovals(){
 function readTaskFilter(){var q=new URLSearchParams(location.hash.slice(1)),v=q.get("taskFilter");return ["running","done","failed","blocked"].indexOf(v)>=0?v:null;}
 function setTaskFilter(v){var q=new URLSearchParams(location.hash.slice(1));if(v)q.set("taskFilter",v);else q.delete("taskFilter");var h=q.toString();history.pushState(null,"",location.pathname+location.search+(h?"#"+h:""));drawKpi();}
 function taskWib(ts){if(ts==null)return "time unavailable";return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Jakarta",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date(Number(ts)*1000))+" WIB";}
-function renderTaskFilter(){var panel=$("taskFilterPanel"),body=$("taskFilterBody"),key=readTaskFilter();if(!panel||!body)return;panel.hidden=!key;if(!key)return;var data=TASK_FILTERS||{},cat=(data.categories||{})[key]||{};$("taskFilterTitle").textContent=({running:"Running tasks",done:"Completed tasks",failed:"Failed tasks",blocked:"Blocked tasks"})[key];body.textContent="";if(data.available!==true){body.textContent=(data.failures_error||"board unavailable")+". Counts unavailable; no zero implied.";return;}var summary=document.createElement("p");summary.textContent=(cat.count||0)+" shown of "+(cat.total||0)+" · "+(cat.omitted||0)+" omitted";body.appendChild(summary);var clear=document.createElement("button");clear.type="button";clear.textContent="Clear";clear.className="btn";clear.onclick=function(){setTaskFilter(null);};body.appendChild(clear);var list=document.createElement("div");list.id="taskFilterRows";body.appendChild(list);(cat.rows||[]).forEach(function(r){var row=document.createElement("article");row.className="task-filter-row";row.dataset.taskId=r.task_id||"";var id=document.createElement("code");id.textContent=r.task_id||"";id.className="mono";row.appendChild(id);var copy=document.createElement("button");copy.type="button";copy.textContent="Copy ID";copy.setAttribute("aria-label","Copy task ID "+(r.task_id||""));copy.onclick=function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(r.task_id||"").catch(function(){id.focus();});else id.focus();};row.appendChild(copy);[r.title||"",(r.assignee||"Unassigned"),"Status: "+(r.status||""),"Outcome: "+(r.latest_outcome||"no run recorded"),"Attempts: "+r.attempts+" · outcome attempts: "+r.outcome_attempts,"Time: "+taskWib(r.timestamp)].forEach(function(x){var e=document.createElement("div");e.textContent=x;row.appendChild(e);});if(key==="running"){var elapsed=r.timestamp==null?"elapsed unavailable":"elapsed "+Math.max(0,Math.floor(Date.now()/1000-r.timestamp))+"s";var e=document.createElement("div");e.textContent="Started: "+taskWib(r.timestamp)+" · "+elapsed+(r.current_step_key?" · Step: "+r.current_step_key:"");row.appendChild(e);}if(key==="blocked"){var b=document.createElement("div");b.textContent="Blocked kind: "+(r.blocked_kind||"unknown")+" · Block reason: "+(r.blocked_reason||"no reason recorded");row.appendChild(b);}var reason=key==="blocked"?r.blocked_reason:r.reason;if(reason){var d=document.createElement("details"),s=document.createElement("summary"),full=document.createElement("p"),raw=String(reason),line=raw.split("\n").find(function(x){return x.trim();})||"no reason recorded",m=line.match(/^.*?[.!?](?=\s|$)/),preview=m?m[0]:line;if(preview.length>240)preview=preview.slice(0,240)+"…";s.textContent="Reason: "+preview;full.textContent=raw;d.appendChild(s);d.appendChild(full);row.appendChild(d);}list.appendChild(row);});if(!cat.rows||!cat.rows.length){var empty=document.createElement("p");empty.textContent=({failed:"Nothing failed on this board.",blocked:"No blocked tasks on this board.",running:"No running tasks on this board.",done:"No completed tasks on this board."})[key];body.appendChild(empty);}}
+function renderTaskFilter(){var panel=$("taskFilterPanel"),body=$("taskFilterBody"),key=readTaskFilter();if(!panel||!body)return;panel.hidden=!key;if(!key)return;var data=TASK_FILTERS||{},cat=(data.categories||{})[key]||{};$("taskFilterTitle").textContent=({running:"Running tasks",done:"Completed tasks",failed:"Failed tasks",blocked:"Blocked tasks"})[key];body.textContent="";if(data.available!==true){body.textContent=(data.failures_error||"board unavailable")+". Counts unavailable; no zero implied.";return;}var summary=document.createElement("p");summary.textContent=(cat.count==null?"—":cat.count)+" shown of "+(cat.total==null?"—":cat.total)+" · "+(cat.omitted==null?"—":cat.omitted)+" omitted";body.appendChild(summary);var clear=document.createElement("button");clear.type="button";clear.textContent="Clear";clear.className="btn";clear.onclick=function(){setTaskFilter(null);};body.appendChild(clear);var list=document.createElement("div");list.id="taskFilterRows";body.appendChild(list);(cat.rows||[]).forEach(function(r){var row=document.createElement("article");row.className="task-filter-row";row.dataset.taskId=r.task_id||"";var id=document.createElement("code");id.textContent=r.task_id||"";id.className="mono";row.appendChild(id);var copy=document.createElement("button");copy.type="button";copy.textContent="Copy ID";copy.setAttribute("aria-label","Copy task ID "+(r.task_id||""));copy.onclick=function(){if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(r.task_id||"").catch(function(){id.focus();});else id.focus();};row.appendChild(copy);[r.title||"",(r.assignee||"Unassigned"),"Status: "+(r.status||""),"Outcome: "+(r.latest_outcome||"no run recorded"),"Attempts: "+r.attempts+" · outcome attempts: "+r.outcome_attempts,"Time: "+taskWib(r.timestamp)].forEach(function(x){var e=document.createElement("div");e.textContent=x;row.appendChild(e);});if(key==="running"){var elapsed=r.timestamp==null?"elapsed unavailable":"elapsed "+Math.max(0,Math.floor(Date.now()/1000-r.timestamp))+"s";var e=document.createElement("div");e.textContent="Started: "+taskWib(r.timestamp)+" · "+elapsed+(r.current_step_key?" · Step: "+r.current_step_key:"");row.appendChild(e);}if(key==="blocked"){var b=document.createElement("div");b.textContent="Blocked kind: "+(r.blocked_kind||"unknown")+" · Block reason: "+(r.blocked_reason||"no reason recorded");row.appendChild(b);}var reason=key==="blocked"?r.blocked_reason:r.reason;if(reason){var d=document.createElement("details"),s=document.createElement("summary"),full=document.createElement("p"),raw=String(reason),line=raw.split("\n").find(function(x){return x.trim();})||"no reason recorded",m=line.match(/^.*?[.!?](?=\s|$)/),preview=m?m[0]:line;if(preview.length>240)preview=preview.slice(0,240)+"…";s.textContent="Reason: "+preview;full.textContent=raw;d.appendChild(s);d.appendChild(full);row.appendChild(d);}list.appendChild(row);});if(!cat.rows||!cat.rows.length){var empty=document.createElement("p");empty.textContent=({failed:"Nothing failed on this board.",blocked:"No blocked tasks on this board.",running:"No running tasks on this board.",done:"No completed tasks on this board."})[key];body.appendChild(empty);}}
 window.addEventListener("hashchange",function(){drawKpi();});
 function drawKpi(){
   var act=A.filter(function(a){return a.s=="running"||a.s=="thinking"}).length;
   var cats=(TASK_FILTERS&&TASK_FILTERS.categories)||{}, activeFilter=readTaskFilter();
   var labels={running:"Running",done:"Done",failed:"Failed",blocked:"Blocked"};
-  var k=Object.keys(labels).map(function(key){var c=cats[key]||{},n=c.count==null?"—":c.count,sub=c.omitted>0?c.count+" shown of "+c.total+" · "+c.omitted+" omitted":"All "+(c.total==null?"—":c.total)+" tasks";return '<button type="button" class="kpi task-kpi" data-task-filter="'+key+'" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter===key)+'"><span>'+labels[key]+'</span><b>'+n+'</b><i>'+sub+'</i></button>'}).join("");
+  var k=Object.keys(labels).map(function(key){var c=cats[key]||{},n=c.count==null?"—":c.count,sub=(c.count==null?"—":c.count)+" shown of "+(c.total==null?"—":c.total)+" · "+(c.omitted==null?"—":c.omitted)+" omitted";return '<button type="button" class="kpi task-kpi" data-task-filter="'+key+'" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter===key)+'"><span>'+labels[key]+'</span><b>'+n+'</b><i>'+sub+'</i></button>'}).join("");
   var denom=S.done+S.failed, rate=denom?((S.done/denom)*100).toFixed(1)+"%":"—";
   k+='<div class="kpi"><span>Active subagents</span><b>'+act+'/'+A.length+'</b><i>All healthy</i></div><button type="button" class="kpi task-kpi" data-task-filter="done" aria-label="Show completed tasks; rate based on '+S.done+' done and '+S.failed+' failed" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter==='done')+'"><span>Tasks completed</span><b>'+(cats.done&&cats.done.count!=null?cats.done.count:"—")+'</b><i>Resolved tasks</i></button><button type="button" class="kpi task-kpi" data-task-filter="done" aria-controls="taskFilterPanel" aria-pressed="'+(activeFilter==='done')+'"><span>Resolved-task success rate</span><b>'+rate+'</b><i>Based on '+S.done+' done / '+denom+' resolved</i></button><div class="kpi"><span>Tokens per second</span><b>'+Math.round(S.tps[S.tps.length-1])+'</b><i>steady</i></div><div class="kpi"><span>Spend today (WIB)</span><b>$'+S.cost.toFixed(2)+'</b><i>of $'+BUD+' budget</i></div>';
   $("kpis").innerHTML=k;
@@ -616,12 +625,12 @@ document.addEventListener("click",function(e){
   });
 })();
 
-function drawAll(){drawTopo();drawOrg();drawTasks();drawKpi();drawPerf();drawTools()}
+function drawAll(){try{drawTopo();}catch(e){}try{drawOrg();}catch(e){}try{drawTasks();}catch(e){}try{drawKpi();}catch(e){}try{drawPerf();}catch(e){}try{drawTools();}catch(e){}}
 
 function drawAlerts(){var ks=Object.keys(AL);$("acount").textContent=ks.length?ks.length+" open":"All clear";setH("alerts",ks.length?ks.map(function(k){var x=AL[k];return '<div class="row"><span class="sev '+x.sev+'"></span><div class="tx">'+x.msg+'<small>'+x.ag+', '+x.t+'</small></div><button data-k="'+k+'">Dismiss</button></div>'}).join(""):'<div class="empty">No alerts. All agents look healthy.</div>')}
 function drawAppr(){$("pcount").textContent=AP.length?AP.length+" waiting":"Nothing pending";setH("appr",AP.length?AP.map(function(x){return '<div class="row"><span class="sev '+x.risk+'"></span><div class="tx">'+x.ag+' wants to '+x.text+'<small>'+x.risk+' risk, requested '+x.t+'</small></div><button data-d="'+x.id+'">Deny</button><button class="ok" data-a="'+x.id+'">Approve</button></div>'}).join(""):'<div class="empty">No pending requests. Risky actions pause here until you decide.</div>')}
-function drawTabs(){$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
-function drawMem(){var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div>'}
+function drawTabs(){if(!Array.isArray(A)||!A.length)return;$("mtabs").innerHTML=A.map(function(a,i){return '<button class="chip'+(i==sel?' on':'')+'" data-i="'+i+'">'+a.n+'</button>'}).join("")+'<button class="chip" data-c="1" style="margin-left:auto">Compact context</button>'}
+function drawMem(){if(!Array.isArray(A)||!A.length||!A[sel]||!A[sel].cx)return;var a=A[sel],c=a.cx,t=c.sys+c.task+c.tools+c.hist+c.mem,sg=[["System",c.sys,"var(--mu)"],["Task",c.task,"var(--gr)"],["Tool results",c.tools,"var(--cy)"],["History",c.hist,"var(--vi)"],["Memory",c.mem,"var(--am)"]];$("mem").innerHTML='<div class="sub">'+Math.round(t/CM*100)+'% of '+(CM/1000)+'k tokens used</div><div class="stack">'+sg.map(function(s){return '<i style="width:'+(s[1]/CM*100)+'%;background:'+s[2]+'"></i>'}).join("")+'</div><div class="leg">'+sg.map(function(s){return '<span><i class="sw" style="background:'+s[2]+'"></i>'+s[0]+' <b>'+s[1].toLocaleString()+'</b></span>'}).join("")+'</div>'}
 function drawReplay(){
   var n=H.length,cur=rp===null?n-1:rp;
   /* Rows are only for agents that have actually done something: an offline
@@ -797,7 +806,7 @@ var ROLE={ceo:"Executive",atlas:"Head of Data",cask:"Data Engineer",keel:"Infras
 var STATUS={online:"running",stuck:"waiting",offline:"offline",paused:"paused",error:"error"};
 var PROG={online:0.7,stuck:0.4,offline:0,paused:0,error:0};
 var TOKEN_KEY="mc_viewer_token";
-var token=null,es=null,lastEventAt=null,lastToks=null,lastToksTs=null,connState="connecting",snapTimer=null,stateTimer=null;
+var token=null,es=null,lastEventAt=null,lastToks=null,lastToksTs=null,connState="connecting",snapTimer=null,stateTimer=null,retryTimer=null,connectInFlight=false;
 
 function shortId(id){if(id==null||id==="")return "\u2014";var s=String(id);return s.length<=8?s:s.slice(-8)}
 function estimateCx(tk){
@@ -852,10 +861,11 @@ function renderLog(events){
   L.scrollTop=L.scrollHeight;
 }
 function ageAgo(s){if(s==null||!isFinite(s))return "";s=+s;if(s<60)return "just now";if(s<3600)return Math.round(s/60)+"m ago";if(s<86400)return Math.round(s/3600)+"h ago";if(s<604800)return Math.round(s/86400)+"d ago";return Math.round(s/604800)+"w ago"}
-function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();renderPipeline(state);if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
+function refreshState(){fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)return null;return r.json();}).then(function(state){if(!state)return;lastEventAt=Date.now();renderPipeline(state);if(!hasData(state)){if(isZeroAgentPayload(state))showZeroAgent();showEmpty(true);setConn("reconnecting");return;}clearZeroAgentFallback();showEmpty(false);mapState(state);drawAll();drawMem();drawAppr();setConn("live");}).catch(function(){})}
 function decideApproval(id,ok){fetch("/v1/approvals/"+encodeURIComponent(id)+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({decision:ok?"approved":"denied"})}).then(function(r){if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return null;}if(!r.ok)throw new Error("http "+r.status);return r.json();}).then(function(u){if(u)log(u.agent||"?",ok?"info":"warn",(ok?"Approved: ":"Denied: ")+(u.action||""));refreshState();}).catch(function(err){log("Onendo","error","Approval decision failed: "+err.message);refreshState();})}
 function sendCommand(agent,action){fetch("/v1/agents/"+encodeURIComponent(agent)+"/command"+tokenQuery(),{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({action:action})}).then(function(r){if(r.status===401){rejectAuth("Token rejected.");return null;}return r.json().then(function(j){return {ok:r.ok,status:r.status,body:j};}).catch(function(){return {ok:r.ok,status:r.status,body:null};});}).then(function(res){if(!res)return;if(res.ok){log(agent,"info","Command "+action+" accepted");refreshState();}else{var d=(res.body&&res.body.detail)||("Command "+action+" failed (http "+res.status+")");log(agent,"error",d);}}).catch(function(err){log(agent,"error","Command failed: "+err.message);})}
 var pipelineExpanded={};
+(function(){var body=document.getElementById("taskPipelineBody");if(!body)return;body.addEventListener("keydown",function(e){var step=Math.max(40,Math.round(body.clientHeight*0.8)),delta=e.key==="ArrowDown"?40:e.key==="ArrowUp"?-40:e.key==="PageDown"?step:e.key==="PageUp"?-step:0;if(!delta)return;e.preventDefault();body.scrollTop+=delta;});})();
 function pipelineEscape(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function pipelineLabelClass(status){return ({triage:"queued",todo:"queued",ready:"queued",scheduled:"queued",running:"running",blocked:"blocked",review:"review",done:"done",archived:""})[status]||""}
 function pipelineWib(ts){return new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Jakarta",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"}).format(new Date(ts*1000))+" WIB"}
@@ -904,8 +914,13 @@ function pushSnapshot(){
   drawReplay();drawFc();
 }
 function initialDraw(){
-  drawTabs();drawMem();drawAlerts();drawAppr();drawReplay();drawFc();
-  var g=$("rng");g.max=Math.max(0,H.length-1);g.value=Math.max(0,H.length-1);
+  try{drawTabs();}catch(e){}
+  try{drawMem();}catch(e){}
+  try{drawAlerts();}catch(e){}
+  try{drawAppr();}catch(e){}
+  try{drawReplay();}catch(e){}
+  try{drawFc();}catch(e){}
+  try{var g=$("rng");g.max=Math.max(0,H.length-1);g.value=Math.max(0,H.length-1);}catch(e){}
   drawAll();
 }
 function hasData(state){
@@ -914,6 +929,16 @@ function hasData(state){
   if(!(k.total_sessions)&&!(state.events&&state.events.length)&&!(state.tasks&&state.tasks.length))return false;
   return true;
 }
+function isZeroAgentPayload(state){return !state||!Array.isArray(state.agents)||!state.agents.length||(Array.isArray(state.nodes)&&!state.nodes.length);}
+function showZeroAgent(){
+  A=[];sel=0;
+  var fallback=$("orgEmptyFallback"),detail=$("orgDetail");
+  if(fallback){fallback.textContent="No agent data — check token or connection";fallback.classList.add("visible");}
+  if(detail){detail.className="empty";detail.textContent="";}
+  var chart=$("orgChart");if(chart)chart.innerHTML="";
+  try{drawAll();}catch(e){}
+}
+function clearZeroAgentFallback(){var fallback=$("orgEmptyFallback");if(fallback){fallback.textContent="";fallback.classList.remove("visible");}}
 function showEmpty(on){$("nobody").classList.toggle("hidden",!on);}
 function setConn(s){
   connState=s;
@@ -935,7 +960,8 @@ function tokenQuery(){return token?("?token="+encodeURIComponent(token)):""}
 function showGate(msg){$("gateerr").textContent=msg||"";var lo=document.querySelector(".card.logs");if(lo)lo.style.display="none";$("gate").classList.remove("hidden");$("tok").focus();}
 function hideGate(){$("gate").classList.add("hidden");var lo=document.querySelector(".card.logs");if(lo)lo.style.display="";}
 function rejectAuth(msg){stop();token=null;try{sessionStorage.removeItem(TOKEN_KEY);}catch(e){} $("tok").value="";showGate(msg||"Token not accepted. If it was rotated, enter the current one \u2014 a stale saved token is discarded automatically.");}
-function stop(){if(es){es.close();es=null;}if(snapTimer){clearInterval(snapTimer);snapTimer=null;}if(stateTimer){clearInterval(stateTimer);stateTimer=null;}}
+function stop(){if(es){es.close();es=null;}if(snapTimer){clearInterval(snapTimer);snapTimer=null;}if(stateTimer){clearInterval(stateTimer);stateTimer=null;}if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}connectInFlight=false;}
+function scheduleRetry(){if(!retryTimer)retryTimer=setTimeout(function(){retryTimer=null;connect();},3000);}
 function ensureSSE(){
   if(es)return;
   setConn("connecting");
@@ -946,15 +972,15 @@ function ensureSSE(){
   es.addEventListener("alert",onSSEAlert);
   es.addEventListener("approval",onSSEApproval);
   es.addEventListener("event",onSSEEvent);
-  es.onopen=function(){lastEventAt=Date.now();setConn("live");};
-  es.onerror=function(){setConn("reconnecting");};
+  es.onopen=function(){lastEventAt=Date.now();setConn("connecting");connect();};
+  es.onerror=function(){setConn("reconnecting");scheduleRetry();};
 }
 function onSSE(e){
   try{var state=JSON.parse(e.data);}catch(err){return;}
   lastEventAt=Date.now();
   renderPipeline(state);
-  if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}
-  showEmpty(false);
+  if(!hasData(state)){if(isZeroAgentPayload(state))showZeroAgent();showEmpty(true);setConn("reconnecting");return;}
+  clearZeroAgentFallback();showEmpty(false);
   mapState(state);
   drawAll();drawMem();drawAppr();
   setConn("live");
@@ -963,15 +989,18 @@ function onSSEAlert(e){try{var a=JSON.parse(e.data);if(a&&a.kind){var key=a.kind
 function onSSEApproval(e){try{var a=JSON.parse(e.data);if(a&&a.id){var i=AP.findIndex(function(x){return x.id===a.id});if(a.status==="pending"){if(i<0)AP.push({id:a.id,ag:a.agent,text:a.text,risk:a.risk||"med",t:fmtT(a.requested_at)});}else if(i>=0){AP.splice(i,1);}}drawAppr();}catch(err){}}
 function onSSEEvent(e){try{var v=JSON.parse(e.data);if(v&&v.agent){logAt(v.agent,v.level||"info",v.text||v.tool_name||"",fmtT(v.ts));}}catch(err){}}
 async function connect(){
+  if(connectInFlight)return;
+  connectInFlight=true;
   try{
     var r=await fetch("/v1/state"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"});
-    if(r.status===401){rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return;}
+    if(r.status===401){connectInFlight=false;rejectAuth("Token rejected. If it was rotated, enter the current one \u2014 any stale saved token has been cleared.");return;}
     if(!r.ok)throw new Error("http "+r.status);
     var state=await r.json();
     lastEventAt=Date.now();
     renderPipeline(state);
-    if(!hasData(state)){showEmpty(true);setConn("reconnecting");return;}
-    showEmpty(false);
+    if(!hasData(state)){if(isZeroAgentPayload(state))showZeroAgent();showEmpty(true);setConn("reconnecting");scheduleRetry();return;}
+    if(retryTimer){clearTimeout(retryTimer);retryTimer=null;}
+    clearZeroAgentFallback();showEmpty(false);
     mapState(state);
     try{var r2=await fetch("/v1/snapshots"+tokenQuery(),{headers:{Accept:"application/json"},cache:"no-store"});if(r2.ok){var sj=await r2.json();buildH(sj.snapshots||[]);}}catch(e){}
     initialDraw();
@@ -979,7 +1008,8 @@ async function connect(){
     ensureSSE();
     if(!snapTimer)snapTimer=setInterval(pushSnapshot,30000);
     if(!stateTimer)stateTimer=setInterval(refreshState,15000);
-  }catch(e){setConn("reconnecting");}
+  }catch(e){setConn("reconnecting");scheduleRetry();}
+  finally{connectInFlight=false;}
 }
 function bootLive(){
   LIVE=true;

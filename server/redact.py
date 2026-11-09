@@ -4,17 +4,26 @@ Randy's rule: the dashboard must never expose credentials or IP addresses —
 it is shown to guests with a read-only token, and the CEO's own memory notes
 contain pod IPs and env-key names.
 
-This is applied at the API boundary (app.py), not in the browser: client-side
-redaction is theatre, because anyone can read the raw JSON.
+Canonical entry point: ``scrub_text`` for strings and ``scrub_obj`` for JSON-like
+values. HTTP, SSE, HTML, notifier and diagnostic adapters must call this policy on
+a fresh presentation copy immediately before serialization; HTML callers escape
+the scrubbed result. Do not mutate sources or buffer complete SSE streams.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-IPV6 = re.compile(r"\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b")
+# Candidate extraction is followed by stdlib validation to avoid treating times as IPv6.
+IPV6_CANDIDATE = re.compile(r"(?<![0-9A-Za-z:])\[?[0-9A-Fa-f:]{2,}(?![0-9A-Za-z:])")
+PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z0-9 ]* )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]* )?PRIVATE KEY-----|-----BEGIN OPENSSH PRIVATE KEY-----[\s\S]*?-----END OPENSSH PRIVATE KEY-----")
+PRIVATE_KEY_HEADER = re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")
+AUTH_HEADER = re.compile(r"(?im)(\b(?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*)([^\r\n]+)")
+CREDENTIAL_QUERY = re.compile(r"(?i)([?&](?:sig|signature|token|access_token|api_key|key|secret|password|credential)=)[^&#\s]*")
 # our own guest token shape and common vendor token shapes
 TOKEN = re.compile(
     r"\b(?:mc-[a-z]-[A-Za-z0-9_\-]{8,}"
@@ -52,7 +61,12 @@ def scrub_text(text: str) -> str:
     """Redact IPs, credentials, tokens and env references from one string."""
     if not isinstance(text, str) or not text:
         return text
-    out = URL_USERINFO.sub(r"\1", text)
+    out = PRIVATE_KEY.sub("[redacted-private-key]", text)
+    # Header values and credential query parameters are removed before generic
+    # assignment/name rules; markers contain no credential-shaped material.
+    out = AUTH_HEADER.sub(r"\1[redacted]", out)
+    out = CREDENTIAL_QUERY.sub(r"\1[redacted]", out)
+    out = URL_USERINFO.sub(r"\1", out)
     out = TOKEN.sub("[redacted-token]", out)
     out = WEBHOOK.sub("[redacted-webhook]", out)
     out = ENV_ASSIGN.sub(lambda m: f"{m.group(1)}=[redacted]", out)
@@ -60,10 +74,29 @@ def scrub_text(text: str) -> str:
     out = CRED_ENV_NAME.sub("[redacted-key-name]", out)
     out = SECRET_PAIR.sub(lambda m: f"{m.group(1)}: [redacted]", out)
     out = IPV4.sub("[ip]", out)
-    out = IPV6.sub("[ip]", out)
+    def replace_ipv6(match: re.Match[str]) -> str:
+        candidate = match.group(0).strip("[]")
+        try:
+            ipaddress.IPv6Address(candidate)
+        except ipaddress.AddressValueError:
+            return match.group(0)
+        return "[ip]"
+    out = IPV6_CANDIDATE.sub(replace_ipv6, out)
+    out = out.replace("[ip]]", "[ip]")
+    out = PRIVATE_KEY_HEADER.sub("[redacted-private-key]", out)
     out = ENV_PATH.sub("[env-file]", out)
     out = ENV_WORD.sub("[env-file]", out)
     return out
+
+
+def scrub_url_query(url: str) -> str:
+    """Redact credential-like query values while preserving ordinary URL data."""
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    pairs = parse_qsl(parts.query, keep_blank_values=True)
+    safe = [(key, "[redacted]" if re.search(r"(?i)(?:sig|token|secret|password|credential|api[_-]?key)", key) else value) for key, value in pairs]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(safe), parts.fragment))
 
 
 def scrub_obj(obj: Any) -> Any:

@@ -58,7 +58,15 @@ class RouteTests(unittest.TestCase):
    status,baseline=self.get();self.assertEqual(status,200)
    valid=db.KANBAN_DB;valid_env=os.environ["MC_KANBAN_DB"];drift=str(_ROOT/"drift.db");c=sqlite3.connect(drift);c.executescript("CREATE TABLE tasks(id TEXT,status TEXT);CREATE TABLE task_links(parent_id TEXT);CREATE TABLE task_events(id INTEGER,task_id TEXT,kind TEXT,created_at REAL,payload TEXT);");c.close();db.KANBAN_DB=drift;os.environ["MC_KANBAN_DB"]=drift
    def non_board(state):
-    value=dict(state);value.pop("pipeline",None);value.pop("pipeline_available",None);value.pop("pipeline_error",None);value.pop("pipelines_omitted",None);value.pop("tasks",None);value["kpis"]={k:v for k,v in state["kpis"].items() if k not in {"tasks_total","tasks_queued","tasks_running","tasks_done","tasks_blocked","tasks_failed"}};return value
+    board_fields={"pipeline","pipeline_available","pipeline_error","pipelines_omitted","tasks","task_filters","failures","failures_omitted","failures_error","alerts"}
+    volatile={"timestamp","ts","updated_at","created_at","last_activity","last_activity_age_s","started_at","completed_at"}
+    def stable(value):
+     if isinstance(value,dict):return {k:stable(v) for k,v in value.items() if k not in volatile}
+     if isinstance(value,list):return [stable(v) for v in value]
+     return value
+    value={k:v for k,v in state.items() if k not in board_fields}
+    value["kpis"]={k:v for k,v in state["kpis"].items() if k not in {"tasks_total","tasks_queued","tasks_running","tasks_done","tasks_blocked","tasks_failed"}}
+    return stable(value)
    status,state=self.get();self.assertEqual(status,200);self.assertEqual((state["pipeline"],state["pipeline_available"],state["pipeline_error"],state["pipelines_omitted"]),([],False,"board unavailable",0));self.assertEqual(non_board(state),non_board(baseline))
    missing=str(_ROOT/"never-created.db");db.KANBAN_DB=missing;os.environ["MC_KANBAN_DB"]=missing
    status,state=self.get();self.assertEqual(status,200);self.assertEqual((state["pipeline"],state["pipeline_available"],state["pipeline_error"],state["pipelines_omitted"]),([],False,"board unavailable",0));self.assertFalse(Path(missing).exists());self.assertEqual(non_board(state),non_board(baseline))

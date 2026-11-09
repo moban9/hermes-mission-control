@@ -40,6 +40,7 @@ export class StubEventSource {
   }
   open(event) { this.readyState = 1; this.dispatch('open', event); }
   error(event) { this.readyState = 0; this.dispatch('error', event); }
+  message(data) { this.dispatch('message', { data }); }
   close() { this.closed = true; this.readyState = 2; }
   static activeCount() { return this.instances.filter(instance => !instance.closed).length; }
 }

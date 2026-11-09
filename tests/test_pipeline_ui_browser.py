@@ -41,8 +41,8 @@ def main():
         with urllib.request.urlopen(base + "/v1/state?token=" + TOKEN) as r:
             state = json.load(r)
         assert state["pipeline_available"] is True and len(state["agents"]) == 0
-        assert state["pipelines_omitted"] == 2 and len(state["pipeline"]) == 5
-        print("HTTP fixture: status=200, agents=0, pipelines=5, omitted=2")
+        assert state["pipelines_omitted"] == 3 and len(state["pipeline"]) == 4
+        print("HTTP fixture: status=200, agents=0, pipelines=4, omitted=3")
 
         positive = f'''\
 import time
@@ -58,8 +58,8 @@ else:
     time.sleep(1)
 result = js("(() => {{const b=document.querySelector('#taskPipelineBody'),t=b.innerText;return {{rows:b.querySelectorAll('.pipeline-row').length,children:b.querySelectorAll('.pipeline-child').length,hidden:b.querySelector('.pipeline-omitted')?.innerText,subtitle:b.querySelector('.pipeline-subtitle')?.innerText,shared:b.querySelector('.pipeline-shared')?.innerText||null,blockedFirst:b.querySelector('.pipeline-child .pipeline-dot.blocked')!==null,flags:b.querySelectorAll('.pipeline-emergent').length,hostile:t.includes('Hostile <img src=x onerror=alert(1)>')&&!b.querySelector('.pipeline-title img'),wib:/WIB/.test(t),missing:t.includes('Started unavailable')}}}})()")
 print("POSITIVE_DOM=" + str(result))
-assert result['rows']==5 and result['children']==4 and result['hidden']=='+2 older pipelines hidden'
-assert result['subtitle']=='planned 0 / added 8' and result['shared']=='also under 1'
+assert result['rows']==4 and result['children']==7 and result['hidden']=='+3 older pipelines hidden'
+assert result['subtitle']=='planned 1 / added 2' and result['shared']=='also under 1'
 assert result['blockedFirst'] and result['hostile'] and result['wib'] and result['flags']>=2
 js("document.querySelector('#taskPipelineBody .pipeline-more').click()")
 assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 8
@@ -70,16 +70,16 @@ goto_url({base!r} + "/")
 wait_for_load();time.sleep(1)
 assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 8
 print("reload persistence: 8 children; actual WIB and missing-start fallback rendered")
-// Clear expansion, deny storage writes, and prove the in-memory fallback rerenders.
+# Clear expansion, deny storage writes, and prove the in-memory fallback rerenders.
 js("sessionStorage.removeItem('mc.pipeline.expanded.ui-root')")
 goto_url({base!r} + "/")
 wait_for_load();time.sleep(1)
-js("Object.defineProperty(Storage.prototype,'setItem',{{configurable:true,value:function(){{throw new Error('storage denied')}}}})")
-assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 4
+js("Storage.prototype.setItem=function(){{throw new Error('storage denied')}}")
+assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 7
 js("document.querySelector('#taskPipelineBody .pipeline-more').click()")
 assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 8
 js("document.querySelector('#taskPipelineBody .pipeline-more').click()")
-assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 4
+assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 7
 js("document.querySelector('#taskPipelineBody .pipeline-more').click()")
 assert js("document.querySelectorAll('#taskPipelineBody .pipeline-child').length") == 8
 print("storage-denied fallback: expand/collapse/re-expand passed")

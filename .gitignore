@@ -18,3 +18,6 @@ data/
 .ingest_token
 .viewer_token
 logs/
+
+# Per-task kanban worktrees (board default workdir anchor)
+.worktrees/

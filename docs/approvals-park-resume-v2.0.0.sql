@@ -41,12 +41,8 @@ CREATE TABLE IF NOT EXISTS approval_wake_receipts_v2 (
  outcome TEXT NOT NULL CHECK(outcome IN ('resumed','denied','expired','already_applied','superseded_block','grant_expired')),
  acknowledged_at REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS approval_push_v2 (
- request_id TEXT PRIMARY KEY REFERENCES approvals(request_id),
- claimed_at REAL NOT NULL, attempted_at REAL,
- state TEXT NOT NULL CHECK(state IN ('claimed','sent','failed','uncertain','suppressed_quiet')),
- reason_code TEXT
-);
+-- Reuse approval_pushes from approvals-attention-v1.1.0.sql.
+-- NEVER add a second push ledger or resend during v2 migration/replay.
 CREATE TABLE IF NOT EXISTS approval_audit_v2 (
  event_id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES approvals(request_id),
  schema_version INTEGER NOT NULL CHECK(schema_version=2),

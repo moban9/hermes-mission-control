@@ -1,0 +1,307 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MC Task Detail additive contract",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/tasks/{task_id}": {
+      "get": {
+        "operationId": "getTaskDetail",
+        "description": "Existing viewer/guest read auth, precedence and anonymous development behavior preserved. No write method.",
+        "security": [
+          {
+            "viewerBearer": []
+          },
+          {
+            "viewerQuery": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current read-only task detail",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown task ID",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFound"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Source unavailable, never an empty card",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Unavailable"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Existing viewer/guest authentication failure unchanged"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "viewerBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "viewerQuery": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "token"
+      }
+    },
+    "schemas": {
+      "TaskDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "status",
+          "status_label",
+          "workspace_kind",
+          "body",
+          "assignee",
+          "priority",
+          "created_at",
+          "started_at",
+          "completed_at",
+          "latest_run",
+          "parents",
+          "children"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "status_label": {
+            "type": "string"
+          },
+          "workspace_kind": {
+            "type": "string"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assignee": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Unix epoch seconds; preserve source null"
+          },
+          "completed_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Unix epoch seconds; preserve source null"
+          },
+          "latest_run": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LatestRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parents": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "children": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LatestRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ended_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Unix epoch seconds; preserve source null"
+          }
+        },
+        "required": [
+          "outcome",
+          "error",
+          "summary",
+          "profile",
+          "attempts",
+          "ended_at"
+        ]
+      },
+      "NotFound": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "const": "task_not_found"
+              },
+              "message": {
+                "const": "Task not found"
+              }
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "reason"
+            ],
+            "properties": {
+              "code": {
+                "const": "board_unavailable"
+              },
+              "message": {
+                "const": "Board unavailable"
+              },
+              "reason": {
+                "enum": [
+                  "read_error",
+                  "schema_mismatch",
+                  "busy"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "evidence_kind": "actual read-only source capture, not implemented endpoint or browser proof",
+  "task": {
+    "id": "t_508a98ba",
+    "title": "Implement bounded MC approval hook v1.0.0 and demonstrate outage/read-only/grant/deny evidence",
+    "assignee": "keystone",
+    "status": "archived",
+    "created_at": 1794197802,
+    "started_at": 1794197862,
+    "completed_at": null
+  },
+  "latest_run": {
+    "id": 189,
+    "outcome": "crashed",
+    "error": "worker exited cleanly (rc=0) without kanban_complete, kanban_block or kanban_request_review \u2014 protocol violation. If the prior run already did the work, verify it and report it via kanban_complete (or kanban_request_review); a run without a terminal kanban call counts as failed no matter what it did. Worker's last output: 'tion probe and all attempted board transitions\u2014comment, request changes, and block\u2014failed with: > `pre_tool_call plugin callback timed out or is still running` **Operator recovery of the loaded hook is required to continue and persist the verdict.** No implementation files were edited, profile copies synchronized, or gateways restarted. The candidate remains on disk only, not operationally closed.'",
+    "summary": null,
+    "profile": "keystone",
+    "ended_at": 1794200525
+  },
+  "attempts": 11,
+  "crashed_attempts": 6,
+  "links": {
+    "parents": [
+      "t_728f725b"
+    ],
+    "children": [
+      "t_2434c6c7",
+      "t_95518061"
+    ]
+  },
+  "timing_wib": {
+    "created_at": "2026-11-09T11:16:42+07:00 WIB",
+    "started_at": "2026-11-09T11:17:42+07:00 WIB",
+    "completed_at": null
+  }
+}

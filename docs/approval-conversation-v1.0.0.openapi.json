@@ -1,0 +1,596 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MC Approval Conversation additive API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v1/approvals/{id}": {
+      "get": {
+        "operationId": "getApprovalConversation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Canonical request_id, or existing numeric alias resolved first"
+          }
+        ],
+        "security": [
+          {
+            "OwnerToken": []
+          },
+          {
+            "ViewerToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical committed snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalConversation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing/invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated role forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terminal approval or changed idempotency payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON exceeds64KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input/reference or ambiguous question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit; Retry-After60",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 seconds"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{id}/ask": {
+      "post": {
+        "operationId": "askApprovalDetails",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Canonical request_id, or existing numeric alias resolved first"
+          }
+        ],
+        "security": [
+          {
+            "OwnerToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Canonical committed snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppendResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing/invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated role forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terminal approval or changed idempotency payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON exceeds64KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input/reference or ambiguous question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit; Retry-After60",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 seconds"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Ask"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals/{id}/messages": {
+      "post": {
+        "operationId": "appendApprovalAnswer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Canonical request_id, or existing numeric alias resolved first"
+          }
+        ],
+        "security": [
+          {
+            "IngestToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Canonical committed snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppendResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing/invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated role forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terminal approval or changed idempotency payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON exceeds64KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input/reference or ambiguous question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit; Retry-After60",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 seconds"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Append"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OwnerToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing owner token; never guest or ingest"
+      },
+      "ViewerToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing guest read authorization only"
+      },
+      "IngestToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing trusted service ingest credential; never browser-visible"
+      }
+    },
+    "schemas": {
+      "Message": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seq",
+          "approval_id",
+          "at",
+          "role",
+          "author",
+          "kind",
+          "text",
+          "client_message_id",
+          "question_seq",
+          "supersedes_seq"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "approval_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "at": {
+            "type": "number"
+          },
+          "role": {
+            "enum": [
+              "operator",
+              "agent"
+            ]
+          },
+          "author": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "question",
+              "answer",
+              "note"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "client_message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question_seq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "supersedes_seq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        }
+      },
+      "Ask": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question",
+          "client_message_id"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "client_message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supersedes_seq": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "Append": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "kind",
+          "client_message_id"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "kind": {
+            "enum": [
+              "answer",
+              "note"
+            ]
+          },
+          "client_message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question_seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "supersedes_seq": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "ApprovalConversation": {
+        "type": "object",
+        "required": [
+          "messages",
+          "awaiting_details",
+          "details_waiting_since",
+          "unanswered_question_seqs",
+          "thread_read_only",
+          "message_watermark"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "awaiting_details": {
+            "type": "boolean"
+          },
+          "details_waiting_since": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unanswered_question_seqs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "uniqueItems": true
+          },
+          "thread_read_only": {
+            "type": "boolean"
+          },
+          "message_watermark": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Additive canonical approval from UX/v2; messages are complete and ascending seq. Terminal includes expired/cancelled."
+      },
+      "AppendResult": {
+        "type": "object",
+        "required": [
+          "approval",
+          "message",
+          "event_id"
+        ],
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalConversation"
+          },
+          "message": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalConversation"
+          }
+        }
+      }
+    }
+  }
+}

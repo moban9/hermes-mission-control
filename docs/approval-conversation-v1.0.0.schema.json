@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mc:approval-conversation:1.0.0",
+  "title": "Approval conversation extension",
+  "type": "object",
+  "required": [
+    "messages",
+    "awaiting_details",
+    "details_waiting_since",
+    "unanswered_question_seqs",
+    "thread_read_only",
+    "message_watermark"
+  ],
+  "properties": {
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Message"
+      }
+    },
+    "awaiting_details": {
+      "type": "boolean"
+    },
+    "details_waiting_since": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "unanswered_question_seqs": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "uniqueItems": true
+    },
+    "thread_read_only": {
+      "type": "boolean"
+    },
+    "message_watermark": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "Message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "approval_id",
+        "at",
+        "role",
+        "author",
+        "kind",
+        "text",
+        "client_message_id",
+        "question_seq",
+        "supersedes_seq"
+      ],
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "approval_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "number"
+        },
+        "role": {
+          "enum": [
+            "operator",
+            "agent"
+          ]
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "question",
+            "answer",
+            "note"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "client_message_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question_seq": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "supersedes_seq": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

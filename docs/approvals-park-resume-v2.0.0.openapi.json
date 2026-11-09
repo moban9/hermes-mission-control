@@ -1,0 +1,1375 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mission Control Approval Park Resume - PROPOSED",
+    "version": "2.0.0",
+    "description": "Additive MC API; does NOT invent a Hermes wake endpoint. CEO delivery uses existing documented POST /v1/runs; compatibility proof required. Distinct credentials are scoped and fail-closed."
+  },
+  "paths": {
+    "/v2/approvals/requests": {
+      "post": {
+        "description": "Durable create/exact-idempotent reuse; total hook budget1500ms; no longpoll. Server recomputes action hash.",
+        "security": [
+          {
+            "pluginAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pending"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/approvals/{id}/parked": {
+      "post": {
+        "description": "Only after canonical block; verify generation via supported board adapter. Decision-before-park emits same unique wake.",
+        "security": [
+          {
+            "pluginAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Park"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v2/approvals/{id}/decisions": {
+      "post": {
+        "description": "Atomic decision+grant+outbox+audit; principal from auth; same decision_id idempotent; conflicting terminal decision409.",
+        "security": [
+          {
+            "ownerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v2/approvals/{id}/grant": {
+      "post": {
+        "description": "Only authenticated originating runtime; scoped token delivery; Cache-Control:no-store; never model-visible. Claim is not consume.",
+        "security": [
+          {
+            "pluginAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Grant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Grant"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantContext"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v2/approvals/{id}/consume": {
+      "post": {
+        "description": "Atomic CAS consume;410 expiry;409 consumed/hash/scope/unknown; no implicit approval creation.",
+        "security": [
+          {
+            "pluginAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consumed"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Consume"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ]
+      }
+    },
+    "/v2/approvals/wake-receipts": {
+      "post": {
+        "description": "Receipt only after verified CEO start + canonical conditional board transition; principal bridge; no browser authority.",
+        "security": [
+          {
+            "bridgeAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Receipt"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/approvals/reconcile": {
+      "get": {
+        "description": "Lifecycle/startup read only, never periodic polling; cursor pagination; includes terminal unsent decisions and expired grants.",
+        "security": [
+          {
+            "bridgeAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconcile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reconcile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Structured failure; never execute on error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Request": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hash_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "action_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "board_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "card_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "profile": {
+                "type": "string",
+                "minLength": 1
+              },
+              "origin_session_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "origin_run_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "intent_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "tool_name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "args": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "execution_context": {
+                "type": "object",
+                "properties": {
+                  "cwd": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "backend_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "runtime_identity": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "env_overrides": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "cwd",
+                  "backend_id",
+                  "runtime_identity",
+                  "env_overrides"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "board_id",
+              "card_id",
+              "profile",
+              "origin_session_id",
+              "origin_run_id",
+              "intent_id",
+              "tool_name",
+              "args",
+              "execution_context"
+            ],
+            "additionalProperties": false
+          },
+          "presentation": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "what_it_does": {
+                "type": "string",
+                "minLength": 1
+              },
+              "affects": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reversible": {
+                "type": "boolean"
+              },
+              "detail": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "summary",
+              "what_it_does",
+              "affects",
+              "reversible",
+              "detail"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "request_id",
+          "hash_version",
+          "action_hash",
+          "context",
+          "presentation"
+        ],
+        "additionalProperties": false
+      },
+      "Pending": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "approval_pending"
+            ]
+          },
+          "approval_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "card_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "park_required": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "display": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "approval_id",
+          "card_id",
+          "action_hash",
+          "park_required",
+          "display"
+        ],
+        "additionalProperties": false
+      },
+      "Park": {
+        "type": "object",
+        "properties": {
+          "board_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "card_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "origin_run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "board_generation": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "board_id",
+          "card_id",
+          "origin_run_id",
+          "board_generation"
+        ],
+        "additionalProperties": false
+      },
+      "Decision": {
+        "type": "object",
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "denied"
+            ]
+          }
+        },
+        "required": [
+          "decision_id",
+          "decision"
+        ],
+        "additionalProperties": false
+      },
+      "Approval": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "expired",
+              "cancelled"
+            ]
+          },
+          "decided_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "actor_principal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "request_id",
+          "status",
+          "decided_at",
+          "actor_principal",
+          "reason_code",
+          "expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "GrantContext": {
+        "type": "object",
+        "properties": {
+          "action_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "board_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "card_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "intent_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "action_hash",
+          "board_id",
+          "card_id",
+          "profile",
+          "intent_id"
+        ],
+        "additionalProperties": false
+      },
+      "Grant": {
+        "type": "object",
+        "properties": {
+          "grant_token": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "expires_at": {
+            "type": "number",
+            "minimum": 0
+          },
+          "approval_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "grant_token",
+          "expires_at",
+          "approval_id"
+        ],
+        "additionalProperties": false
+      },
+      "Consume": {
+        "type": "object",
+        "properties": {
+          "action_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "board_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "card_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "intent_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "grant_token": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "action_hash",
+          "board_id",
+          "card_id",
+          "profile",
+          "intent_id",
+          "grant_token"
+        ],
+        "additionalProperties": false
+      },
+      "Consumed": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "grant_consumed_success"
+            ]
+          },
+          "approval_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "code",
+          "approval_id"
+        ],
+        "additionalProperties": false
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ceo_run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ceo_session_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ceo_started_at": {
+            "type": "number",
+            "minimum": 0
+          },
+          "card_unblocked_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "resumed",
+              "denied",
+              "expired",
+              "already_applied",
+              "superseded_block",
+              "grant_expired"
+            ]
+          }
+        },
+        "required": [
+          "event_id",
+          "ceo_run_id",
+          "ceo_session_id",
+          "ceo_started_at",
+          "card_unblocked_at",
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "approval_unavailable",
+              "invalid_context",
+              "intent_conflict",
+              "decision_conflict",
+              "grant_consumed",
+              "grant_expired",
+              "grant_action_mismatch",
+              "grant_scope_mismatch",
+              "execution_state_unknown",
+              "not_found",
+              "unauthorized",
+              "forbidden"
+            ]
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false
+      },
+      "Reconcile": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReconcileItem"
+            },
+            "maxItems": 100
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "ReconcileItem": {
+        "type": "object",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/Approval"
+          },
+          "event_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "board_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "card_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "profile": {
+                "type": "string",
+                "minLength": 1
+              },
+              "intent_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "action_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "origin_session_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "origin_run_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "board_id",
+              "card_id",
+              "profile",
+              "intent_id",
+              "action_hash",
+              "origin_session_id",
+              "origin_run_id"
+            ],
+            "additionalProperties": false
+          },
+          "board_generation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "grant_state": {
+            "type": "string",
+            "enum": [
+              "none",
+              "valid",
+              "expired",
+              "consumed"
+            ]
+          },
+          "receipt_outcome": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "approval",
+          "event_id",
+          "context",
+          "board_generation",
+          "grant_state",
+          "receipt_outcome"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "pluginAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Originating runtime scoped profile/board identity; not shared UI/ingest authority"
+      },
+      "ownerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Owner-only decision authority; viewer rejected"
+      },
+      "bridgeAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Internal event bridge only; never UI/guest"
+      }
+    }
+  }
+}

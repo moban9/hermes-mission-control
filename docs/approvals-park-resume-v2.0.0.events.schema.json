@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:onendo:approval-event:2.0.0",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "approval.created",
+        "approval.decided",
+        "approval.parked",
+        "approval.wake_admitted",
+        "approval.ceo_started",
+        "approval.card_unblocked",
+        "approval.grant_consumed",
+        "approval.grant_expired",
+        "approval.push_outcome"
+      ]
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "board_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "card_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hash_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "action_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actor_principal": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "occurred_at": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reason_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "request_id",
+    "board_id",
+    "card_id",
+    "profile",
+    "hash_version",
+    "action_hash",
+    "correlation_id",
+    "actor_principal",
+    "occurred_at",
+    "reason_code"
+  ],
+  "additionalProperties": false
+}

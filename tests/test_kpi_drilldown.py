@@ -7,6 +7,7 @@ import unittest
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "server"))
 import reducer
+import snapshot
 
 
 class TaskFilterProjectionTests(unittest.TestCase):
@@ -47,8 +48,8 @@ class TaskFilterProjectionTests(unittest.TestCase):
         cats = filters["categories"]
         failed = {x["task_id"]: x for x in cats["failed"]["rows"]}
         self.assertEqual(set(failed["f"]), {"task_id", "title", "assignee", "profile", "task_status", "latest_run_id", "outcome", "attempts", "outcome_attempts", "ended_at", "started_at", "completed_at", "timestamp", "error", "blocked_kind", "block_reason", "current_step"})
-        self.assertEqual(failed["f"]["attempts"], 11)
         self.assertEqual(failed["f"]["outcome_attempts"], 6)
+        self.assertEqual({row["task_id"]: row for row in snapshot.load_snapshot(self.path).categories["failed"]["rows"]}["f"]["label"], "crashed ×6 · 11 attempts")
         self.assertEqual(failed["f"]["error"], "diagnostic:v1 last_tool=browser_click approval_state=denied tool_call_id=call-<x> source=approval")
         self.assertNotIn("d", failed)
         self.assertNotIn("o", failed)
@@ -80,6 +81,13 @@ class TaskFilterProjectionTests(unittest.TestCase):
         self.assertEqual(r["task_kpi"]["tasks_failed"], 1)
         self.assertEqual(r["task_kpi"]["tasks_total"], 5)
         self.assertEqual(r["task_kpi"]["success_rate"], 50.0)
+        for name in ("running", "done", "failed", "blocked"):
+            category = r["task_filters"]["categories"][name]
+            self.assertEqual(category["count"], len(category["rows"]), name)
+            self.assertEqual(category["total"], category["count"] + category["omitted"], name)
+        self.assertEqual(r["task_filters"]["categories"]["done"]["count"], 1)
+        self.assertEqual(r["task_filters"]["categories"]["failed"]["count"], 1)
+        self.assertEqual(r["task_kpi"]["tasks_done"], r["task_filters"]["categories"]["done"]["total"])
         self.assertTrue(r["tasks"][0]["id"])
 
     def test_cap_and_count_identity(self):
@@ -87,10 +95,60 @@ class TaskFilterProjectionTests(unittest.TestCase):
         for i in range(25):
             c.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?)", (f"r{i:02}", "running", "p", "running", None, None, i, None, 1, i, 0))
         c.commit(); c.close()
-        cat = reducer.reduce_task_filters(path=self.path)["task_filters"]["categories"]["running"]
+        result = reducer.reduce_task_filters(path=self.path)
+        cat = result["task_filters"]["categories"]["running"]
         self.assertEqual((cat["count"], cat["total"], cat["omitted"]), (20, 26, 6))
         self.assertEqual(cat["count"], len(cat["rows"]))
         self.assertEqual(len({x["task_id"] for x in cat["rows"]}), 20)
+        # The legacy KPI remains the uncapped population, not the tile count.
+        self.assertEqual(result["task_kpi"]["tasks_running"], 26)
+        self.assertEqual(result["task_filters"]["categories"]["failed"]["count"], len(result["failures"]))
+
+    def test_all_failure_outcomes_and_empty_reasons(self):
+        c = sqlite3.connect(self.path)
+        outcomes = ("crashed", "gave_up", "timed_out", "failed", "rate_limited")
+        for i, outcome in enumerate(outcomes):
+            task_id = f"outcome-{i}"
+            c.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?)", (task_id, task_id, None, "ready", None, None, 1, i, None, None, 0))
+            c.execute("INSERT INTO task_runs VALUES(?,?,?,?,?,?,?,?)", (30+i, task_id, "p", outcome, None if i == 0 else "" if i == 1 else "reason", 1, 2, None))
+        c.commit(); c.close()
+        result = reducer.reduce_task_filters(path=self.path)
+        failed = {row["task_id"]: row for row in result["task_filters"]["categories"]["failed"]["rows"]}
+        self.assertEqual({failed[f"outcome-{i}"]["outcome"] for i in range(5)}, set(outcomes))
+        self.assertEqual(failed["outcome-0"]["error"], None)
+        self.assertEqual(failed["outcome-1"]["error"], "")
+        self.assertEqual(failed["outcome-0"]["attempts"], 1)
+        self.assertEqual(result["failures"], result["task_filters"]["categories"]["failed"]["rows"])
+        self.assertEqual(result["failures_omitted"], result["task_filters"]["categories"]["failed"]["omitted"])
+
+    def test_blocked_kinds_reasons_and_stale_kind(self):
+        c = sqlite3.connect(self.path)
+        kinds = ("needs_input", "dependency", "capability", "transient")
+        for i, kind in enumerate(kinds):
+            task_id = f"blocked-{kind}"
+            c.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?)", (task_id, task_id, "p", "blocked", kind, None, 1, i, None, None, 0))
+            c.execute("INSERT INTO task_events VALUES(?,?,?,?,?)", (50+i, task_id, "blocked", json.dumps({"reason": f"reason-{kind}"}), i))
+        c.commit(); c.close()
+        blocked = {row["task_id"]: row for row in reducer.reduce_task_filters(path=self.path)["task_filters"]["categories"]["blocked"]["rows"]}
+        for kind in kinds:
+            self.assertEqual(blocked[f"blocked-{kind}"]["blocked_kind"], kind)
+            self.assertEqual(blocked[f"blocked-{kind}"]["block_reason"], f"reason-{kind}")
+        self.assertNotIn("s", blocked)  # stale block_kind on ready status
+
+    def test_empty_database_is_available_and_schema_mismatch_is_not(self):
+        empty = os.path.join(self.tmp.name, "empty.db")
+        c = sqlite3.connect(empty)
+        c.executescript("CREATE TABLE tasks(id TEXT,title TEXT,assignee TEXT,status TEXT,block_kind TEXT,current_step_key TEXT,started_at INTEGER,completed_at INTEGER,priority INTEGER,created_at INTEGER,consecutive_failures INTEGER); CREATE TABLE task_links(parent_id TEXT,child_id TEXT); CREATE TABLE task_runs(id INTEGER,task_id TEXT,profile TEXT,outcome TEXT,error TEXT,started_at INTEGER,ended_at INTEGER,summary TEXT); CREATE TABLE task_events(id INTEGER,task_id TEXT,kind TEXT,payload TEXT,created_at INTEGER);")
+        c.close()
+        r = reducer.reduce_task_filters(path=empty)
+        self.assertTrue(r["task_filters"]["available"])
+        self.assertEqual([r["task_filters"]["categories"][k]["count"] for k in ("running", "done", "failed", "blocked")], [0, 0, 0, 0])
+        bad = os.path.join(self.tmp.name, "schema.db")
+        sqlite3.connect(bad).close()
+        unavailable = reducer.reduce_task_filters(path=bad)
+        self.assertFalse(unavailable["task_filters"]["available"])
+        self.assertEqual(unavailable["task_filters"]["error"], "board unavailable: schema_mismatch")
+        self.assertIsNone(unavailable["task_filters"]["categories"]["running"]["total"])
 
 
 if __name__ == "__main__":

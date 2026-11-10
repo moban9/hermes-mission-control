@@ -242,7 +242,7 @@ async def _sse_gen():
                     ev, data = q.get_nowait()
                 except asyncio.QueueEmpty:
                     break
-                yield _sse(ev, redact.scrub_obj(data) if ev == "approval" else data)
+                yield _sse(ev, redact.scrub_obj(data))
                 drained = True
             if drained:
                 last_keepalive = time.time()

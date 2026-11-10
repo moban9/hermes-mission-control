@@ -13,6 +13,7 @@ import threading
 import time
 import urllib.request
 import uuid
+from server.redact import scrub_url_query
 
 URL = os.getenv("MC_URL", "http://127.0.0.1:8010").rstrip("/")
 TOKEN = os.environ.get("MC_INGEST_TOKEN", "")
@@ -20,6 +21,26 @@ RUN_ID = os.getenv("MC_RUN_ID", time.strftime("run_%Y-%m-%d_") + uuid.uuid4().he
 _AGENT = os.getenv("MC_AGENT_ID", "")
 _q: "queue.Queue[dict]" = queue.Queue(maxsize=5000)
 _SECRET = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|Bearer\s+\S+|api[_-]?key\s*[=:]\s*\S+)", re.I)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Reject redirects; sanitize defensively before urllib could follow."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        for name in list(req.headers) + list(req.unredirected_hdrs):
+            if re.search(r"(?i)(authorization|cookie|credential|token|secret|key)", name):
+                req.remove_header(name)
+                req.unredirected_hdrs.pop(name, None)
+        # Scrub before any redirect-target processing; redirects are never followed.
+        scrub_url_query(newurl)
+        raise urllib.error.HTTPError(None, code, "redirect refused", headers, None)
+
+
+_opener = urllib.request.build_opener(_NoRedirect())
+
+
+def _urlopen(request, timeout):
+    """Open without redirects; never expose URL or credentials in diagnostics."""
+    return _opener.open(request, timeout=timeout)
 
 
 def _ulid() -> str:
@@ -59,7 +80,7 @@ def _post(batch):
     )
     for delay in (0.5, 2, 5):
         try:
-            urllib.request.urlopen(req, timeout=5).read()
+            _urlopen(req, timeout=5).read()
             return
         except Exception:
             time.sleep(delay)
@@ -92,7 +113,7 @@ def request_approval(agent_id: str, action: str, risk: str, timeout_s: int = 900
                 f"{URL}/v1/approvals/{aid}/wait?timeout=25",
                 headers={"Authorization": f"Bearer {TOKEN}"},
             )
-            status = json.loads(urllib.request.urlopen(req, timeout=30).read())["status"]
+            status = json.loads(_urlopen(req, timeout=30).read())["status"]
             if status != "pending":
                 return status == "approved"
         except Exception:

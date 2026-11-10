@@ -34,6 +34,10 @@ main{max-width:1180px;margin:0 auto;padding:16px;display:grid;gap:14px;grid-temp
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;backdrop-filter:blur(10px);min-width:0}
 .card h2{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .card h2 small{color:var(--mu);font-weight:400;margin-left:auto;font-size:12px}
+.scroll-panel{--panel-max-h:min(55vh,480px);max-height:var(--panel-max-h);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--cy) var(--bg2);overflow-wrap:anywhere}
+.scroll-panel>h2{position:sticky;top:-14px;z-index:2;padding:8px 0;background:var(--panelSolid,var(--bg));}
+.scroll-panel::-webkit-scrollbar{width:8px}.scroll-panel::-webkit-scrollbar-track{background:var(--bg2)}.scroll-panel::-webkit-scrollbar-thumb{background:var(--cy);border-radius:8px}
+.scroll-panel:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
 .kpis{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
 .kpi b{display:block;font-size:24px;font-weight:700;line-height:1.1;margin:2px 0}
@@ -230,7 +234,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
 </header>
 <main>
   <section class="kpis" id="kpis"></section>
-  <section class="card" id="taskFilterPanel" aria-live="polite" hidden style="grid-column:1/-1"><h2 id="taskFilterTitle">Task details</h2><div id="taskFilterBody"></div></section>
+  <section class="card scroll-panel" id="taskFilterPanel" aria-live="polite" hidden style="grid-column:1/-1" tabindex="0" role="region" aria-label="Task details"><h2 id="taskFilterTitle">Task details</h2><div id="taskFilterBody"></div></section>
 
   <section class="card topo">
     <h2 style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">Agent network <small>Onendo orchestrator and subagents</small>
@@ -239,7 +243,7 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
     <div id="stuckReport" style="display:none;margin-top:8px;font-size:11.5px;line-height:1.5;max-height:150px;overflow-y:auto"></div>
   </section>
 
-  <section class="card queue">
+  <section class="card queue scroll-panel" tabindex="0" role="region" aria-label="Task pipeline summary">
     <h2>Task pipeline <small id="qsum"></small></h2>
     <div class="cols" id="cols"></div>
     <div id="tasks"></div>
@@ -280,13 +284,13 @@ input[type=range]{accent-color:var(--cy);margin:8px 0}
     <div class="pm"><span>Budget left</span><b id="bud">$0</b></div>
   </section>
 
-  <section class="card tools">
+  <section class="card tools scroll-panel" tabindex="0" role="region" aria-label="Tool calls">
     <h2>Tool calls <small>Last 5 minutes</small></h2>
     <div class="tl" id="tools"></div>
   </section>
-  <section class="card n6"><h2>Alerts <small id="acount"></small></h2><div id="alerts"></div></section>
-  <section class="card n6"><h2>Approval queue <small id="pcount"></small></h2><div id="appr"></div></section>
-  <section class="card n7"><h2>Context and memory <small>Inspect an agent</small></h2><div class="chips" id="mtabs"></div><div id="mem"></div></section>
+  <section class="card n6 scroll-panel" tabindex="0" role="region" aria-label="Alerts"><h2>Alerts <small id="acount"></small></h2><div id="alerts"></div></section>
+  <section class="card n6 scroll-panel" tabindex="0" role="region" aria-label="Approval queue"><h2>Approval queue <small id="pcount"></small></h2><div id="appr"></div></section>
+  <section class="card n7 scroll-panel" tabindex="0" role="region" aria-label="Context and memory"><h2>Context and memory <small>Inspect an agent</small></h2><div class="chips" id="mtabs"></div><div id="mem"></div></section>
   <section class="card n5"><h2>Cost forecast <small id="fcs"></small></h2><svg id="fc" class="spark" style="height:110px" viewBox="0 0 300 110" preserveAspectRatio="none"></svg><div id="fct"></div></section>
   <section class="card n12"><h2>Replay <small id="rpt">Live</small></h2><svg id="heat" class="spark" style="height:90px" viewBox="0 0 360 60" preserveAspectRatio="none" role="img" aria-label="Agent state history"></svg><input type="range" id="rng" min="0" max="0" value="0" style="width:100%" aria-label="Replay position"><div class="chips" id="rpa"></div><div class="meta mono"><span id="rpi"></span><button id="live">Back to live</button></div></section>
 </main>

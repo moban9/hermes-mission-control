@@ -90,6 +90,20 @@ try {
   await send('Page.navigate', { url: PAGE });
   await waitFor(`document.querySelectorAll('.pipeline-row').length >= 12`);
   await sleep(1200);
+  // Grow every shared utility panel with deterministic DOM rows on top of the
+  // isolated seeded-board page. This exercises real CSS/layout independent of feeds.
+  const utilitySeed = await evaluate(`(()=>{
+    const panels=[...document.querySelectorAll('.scroll-panel')];
+    for(const p of panels){p.hidden=false;for(let i=0;i<16;i++){const row=document.createElement('div');row.className='scroll-acceptance-row';row.style.cssText='min-height:92px;padding:8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere';row.textContent='Seeded acceptance row '+String(i+1).padStart(2,'0')+' — '+('long-title-and-task-id-'.repeat(5));p.appendChild(row)}}
+    return panels.map(p=>({id:p.id||p.getAttribute('aria-label'),rows:p.querySelectorAll('.scroll-acceptance-row').length}))
+  })()`);
+  if(utilitySeed.length!==6||utilitySeed.some(p=>p.rows!==16))throw new Error(`Unexpected shared scroll panel census/seed: ${JSON.stringify(utilitySeed)}`);
+  const utilityMeasurements=await evaluate(`(()=>[...document.querySelectorAll('.scroll-panel')].map(p=>{const s=getComputedStyle(p),max=parseFloat(s.maxHeight);return {id:p.id||p.getAttribute('aria-label'),scrollHeight:p.scrollHeight,clientHeight:p.clientHeight,maxHeight:s.maxHeight,max,overflow:s.overflowY,overscroll:s.overscrollBehaviorY,gutter:s.scrollbarGutter,focusable:p.tabIndex===0,region:p.getAttribute('role')==='region',label:!!p.getAttribute('aria-label'),horizontal:p.scrollWidth<=p.clientWidth+1,overflowed:p.scrollHeight>p.clientHeight&&p.clientHeight<=max+1}}))()`);
+  if(utilityMeasurements.some(p=>!p.overflowed||p.overflow!=='auto'||p.overscroll!=='contain'||p.gutter!=='stable'||!p.focusable||!p.region||!p.label||!p.horizontal))throw new Error(`Shared scroll panel contract failed: ${JSON.stringify(utilityMeasurements)}`);
+  const utilityMutations=await evaluate(`(()=>[...document.querySelectorAll('.scroll-panel')].map(p=>{const old=p.getAttribute('style'),before=p.clientHeight;p.style.setProperty('max-height','none','important');const mutated=p.clientHeight,detected=mutated>before+1;if(old===null)p.removeAttribute('style');else p.setAttribute('style',old);return {id:p.id||p.getAttribute('aria-label'),before,mutated,detected}}))()`);
+  if(utilityMutations.some(p=>!p.detected))throw new Error(`Shared panel cap mutation escaped: ${JSON.stringify(utilityMutations)}`);
+  console.log(`UTILITY_PANEL_MEASUREMENTS ${JSON.stringify(utilityMeasurements)} MUTATION ${JSON.stringify(utilityMutations)}`);
+  await evaluate(`(()=>{document.querySelectorAll('.scroll-acceptance-row').forEach(r=>r.remove());document.querySelector('#taskFilterPanel').hidden=true})()`);
   if (CAP_MUTANT) await evaluate(`(()=>{const b=document.querySelector('#taskPipelineBody');b.style.setProperty('height','auto','important');b.style.setProperty('max-height','none','important');b.style.setProperty('overflow-y','auto','important')})()`);
   const scrollChecks = await evaluate(`(()=>{
     const b=document.querySelector('#taskPipelineBody'), panel=document.querySelector('#taskPipelinePanel'), h=panel.querySelector('h2');

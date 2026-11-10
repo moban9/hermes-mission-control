@@ -6,12 +6,13 @@ export class CdpInjectionController {
     if (!session || typeof session.evaluate !== 'function' || typeof session.send !== 'function') throw new TypeError('A live CdpSession is required');
     this.session = session;
     this.cleanups = [];
+    this.injections = [];
     this.networkEnabled = false;
     this.closed = false;
   }
   async snapshot() { return this.session.snapshot(); }
   async evaluate(expression) { return this.session.evaluate(expression); }
-  async addCleanup(cleanup) { if (typeof cleanup !== 'function') throw new TypeError('cleanup must be a function'); this.cleanups.push(cleanup); }
+  async addCleanup(cleanup, label = 'custom') { if (typeof cleanup !== 'function') throw new TypeError('cleanup must be a function'); this.cleanups.push(cleanup); this.injections.push({ label, appliedAt: new Date().toISOString() }); }
   async trackTimer(id, clear = 'clearTimeout') {
     if (!['clearTimeout', 'clearInterval'].includes(clear)) throw new Error('Timer clear method must be clearTimeout or clearInterval');
     await this.addCleanup(() => this.session.evaluate(`${clear}(${Number(id)})`));
